@@ -1,0 +1,4553 @@
+Nowcasting Net Asset Values:
+The Case of Private Equity∗
+Gregory W. Brown†
+
+Eric Ghysels‡
+
+Oleg Gredil§
+
+First draft – June, 2019
+This version – April 7, 2020
+
+∗
+
+We are grateful to the Private Equity Research Consortium and the Institute for Private Capital for
+support and data access. We thank Wendy Hu for outstanding research assistance. We thank Mike Aguilar,
+Barry Griffiths, Ian Roberts, Erkko Etula, Farshid Asl, Sophie Shive as well as seminar participants at
+Chapel Hill and Oxford Private Equity Research Symposiums, Goldman Sachs SQAA group, and 2020 AFA
+Annual Meeting for useful comments and suggestions.
+†
+University of North Carolina at Chapel Hill, Kenan-Flagler Business School and Frank Hawkins Kenan
+Institute of Private Enterprise, gregwbrown@unc.edu, (919) 962-9250
+‡
+Department of Finance, Kenan-Flagler Business School, Department of Economics, University of North
+Carolina at Chapel Hill, Frank Hawkins Kenan Institute of Private Enterprise, and Centre for Economic
+Policy Research (CEPR), eghysels@unc.edu, (919) 962-9810
+§
+Tulane University, Freeman School of Business, ogredil@tulane.edu, (504) 314-7567
+
+Nowcasting Net Asset Values:
+The Case of Private Equity
+
+Abstract
+We apply advances in analysis of mix frequency and sparse data to estimate “unsmoothed”
+private equity (PE) Net Asset Values (NAVs) at the weekly frequency for individual funds.
+Using simulations and a large sample of buyout and venture funds, we show that our method
+yields superior estimates of fund asset values than a simple approach based on comparable
+public asset and as-reported NAVs. Our method easily accommodates additional data on
+PE fund portfolios, such as individual holdings, relevant mergers and acquisitions, secondary
+trades with fund stakes; extends to other illiquid portfolios that are subject to appraisal bias
+while generating irregular and infrequent cash flows. We find significant variation in systematic and idiosyncratic risk exposures across PE funds and through time. The risk-return
+profile based on the samples from the 1990s is not representative of currently operating funds.
+The market beta of an average buyout [venture] fund, at 1.05–1.10 [1.20–1.32], is notably
+lower than previous studies suggest, while nudging higher exposures results in inferior nowcasts. The overall risk of a median buyout [venture] fund is 33% [38%] per year if measured
+in standard deviations of total returns, an increase of 10 [13] percentage points relative to
+the series based on as-reported NAVs.
+
+Keywords: Private Equity, Venture Capital, Leveraged Buyouts, Institutional Investors,
+State Space Models, Machine Learning
+JEL Classification: G23, G24, G30
+
+1
+
+Introduction
+
+Valuing illiquid assets is hard but often necessary to provide critical input for investment
+decisions.1 Private equity (PE) investments are a prime example of such a setting whereby
+various stakeholders have to rely on infrequently and strategically self-reported Net Asset
+Values (NAVs) by fund managers while the secondary markets for most fund stakes are
+relatively undeveloped and likely reflect the marginal utility to trade of an unrepresentative
+investor.2 However, at least for some PE funds, one has many observations that are plausibly
+informative of the market value of the fund portfolio and updated at higher than quarterly
+frequencies. These may include characteristics of individual assets held, comparable private
+transactions, public returns, the history of fund cash flows, NAV reports and occasional
+secondary trades, etc. This paper develops a method of how to use these types of data
+jointly in a unified statistical framework to (i) learn about risk, return, and reporting quality
+characteristics of individual funds, and (ii) to estimate unbiased asset values at the relevant
+data arrival frequency (such as weekly or daily)—i.e., to nowcast PE fund NAVs. Nowcasting
+is the prediction of the present, the very near future and the very recent past in economics.
+We expand on the methods used in the literature as nowcasting NAVs is more complex than
+macroeconomic variables like GDP growth (the most studied example).
+We model fund “true” asset values and, correspondingly, “true” returns as the latent
+factor in a sparse-data State Space Model (SSM) estimated at high frequencies (relative
+to quarterly fund reporting) at an individual PE fund level. Our setup relies on the welldeveloped SSM machinery (see, e.g. Durbin and Koopman, 2012) but allows incorporating
+salient properties of asset returns such as heteroskedastic volatility. We evaluate the performance of our method not only not only via simulated data but also using real PE fund data
+arriving after the model estimation period. In particular, we examine out-of-sample realized
+cash flows versus the levels implied by the model. This provides additional confidence in
+1
+2
+
+See Brito (1977); Longstaff (2001); Gârleanu (2009); Ang et al. (2014) among others.
+See Ewens et al. (2013); Brown et al. (2019) and Nadauld et al. (2016).
+
+1
+
+the SSM parameters that we estimate with the help of machine-learning methods for each of
+1,745 funds, or 62% of our sample, independently. For 65% to 80% (depending on the metric) of these funds the model outperforms a naı̈ve but intuitive approach whereby reported
+NAVs are extrapolated using cash flows and returns of a comparable public asset.
+We show that, with partial imputation of auxiliary parameters using peer funds, we can
+estimate fund-level SSMs for over 94% of the sample funds with a 73-86% improvement rate
+relatively to the naı̈ve approach. The peer funds are defined as having the same strategy
+and/or industry, a vintage within one year and having the same size tercile as the estimand
+fund. Our performance assessment metrics are based on the idea that if the fund’s true
+returns were observed and used to discount fund cash flows (and the true net asset values),
+the fund to-date PMEs (Kaplan and Schoar, 2005) computed using these series would be
+equal to one. Furthermore, we show that, given fund-level SSM estimates, the in-sample
+performance is a good predictor of the out-of-sample performance, yielding useful criteria
+for model selection and forecast combination. Using our estimate of fund NAVs reduces the
+out-of-sample forecast error of subsequent cash flows by 55-58% relative to the as-reported
+NAVs of a typical fund, with filtered weekly returns featuring zero autocorrelation and
+realistic standard deviations (e.g., 33% to 38% per year).
+There are two pillars to our approach. One is that we use the individual fund-level data on
+cash flows and NAVs simultaneously to identify how NAVs are “smoothed” while jointly estimating the fund’s systematic and idiosyncratic risk exposures. This is different from existing
+work featuring the complete fund-level data that either (i) relies on reported NAVs and attempts to remove autocorrelation induced by smoothing via a distributed lag market-model/
+panel-AR(p) (Woodward and Hall, 2004; Ewens et al., 2013; Goetzmann et al., 2018), or (ii)
+disregards the NAV information altogether and relies solely on funds’ realized cash flow
+data (see, inter alia, Driessen et al., 2012; Franzoni et al., 2012; Buchner and Stucke, 2014;
+Ang et al., 2018). For a typical fund with say 40 NAV reports and 25 distributions over a
+10-year life we gain 22 degrees of freedom as we only need to estimate at most 3 additional
+
+2
+
+parameters. The second pillar is that we unsmooth weekly returns cumulative since a fund’s
+inception (rather than per quarter returns, see also Ang 2014).3 This is more consistent with
+microfoundations for the smoothing bias whereby appraisers look back for relevant events
+within the past quarter to arrive at their valuation assessment.
+A key challenge for studies featuring deal-level datasets has been addressing selection
+bias in observed deal realizations (typically successful ones) relative to the overall pool of
+investments (Cochrane, 2005; Korteweg and Sorensen, 2010). This challenge is mostly resolved in our framework since we use the complete history of fund-level investments. In
+our analysis, deal-level data merely help to better identify the fund’s structural risk–return
+parameters and the inference about the cumulative return path. In other words, deal-level
+data significantly reduce noise for fund SSM estimates and potentially reduce the number of
+parameters that require estimation but do not induce selection bias. However, even without
+portfolio company data, model performance is improved by augmenting the analysis with
+high frequency comparable benchmark returns.
+The PE fund sample for this study is provided by Burgiss (see Brown et al., 2015, for
+description) and consists of fund-level cash flows between each fund and its investors, fund
+NAV reports, as well as data on fund strategy, vintage year, and industry. We do not
+observe the information on the fund individual holdings but demonstrate in simulations
+that SSM precision improves by a factor of 2-3 for a typical fund even when keeping the
+comparable asset match quality unchanged. Observing fund portfolio-level holdings and
+their contribution to fund-level NAVs allows us to compute (rather than estimate jointly
+with other parameters) the fund distribution density trend and its variance. Utilizing realtime fund holdings data has additional benefits: (i) the construction of a more informative
+comparable public benchmark and (ii) incorporating valuations in recent M&A deals, both
+public and private, that feature targets similar to the fund current holdings.
+3
+
+Note that “detectability” of the smoothing at quarterly frequency implies its “detectability” at weekly
+frequency, but not vice verse. For a weekly smoothing at 0.70-rate, quarterly AR(1) is 0.01 but the variance
+is only 40% of the unsmoothed series. Thus, regressions at low frequencies never sufficiently unsmooth NAVs.
+
+3
+
+In addition to our methodological contribution, we generate important new findings about
+fund-level risk and return. For example, we find fund-level systematic risk (beta) to be lower
+than many other recent studies. The average (median) is around 1.05 (1.09) for buyout funds
+and 1.20 (1.18) for venture funds, as opposed to averages around 1.25 and 1.80, respectively,
+in Ang et al. (2018) even though we used their estimates to setup our profile grid for betas.
+Part of this difference results from the fact that most studies do not actually estimate the
+market beta of a fund over its life time but rather the beta of the panel of time-aggregated
+fund cash flows. The distinction is important when cash flows from funds are clustered in time
+and contribute greater weight to the panel (e.g. venture in late 90s). Panel-based estimates
+generally will not reflect the beta of an average fund in this case. We provide regression
+analyses to support this claim. Moreover, we show that “nudging estimation” to feature
+higher systematic risk exposures, as well as ignoring the heterogeneity in other parameters
+in the cross section of funds, results in inferior nowcasting performance of the fund-level
+SSMs, in-sample and out-of-sample. In other words, higher systematic risk assumptions are
+less consistent with the fund-level cash flow realizations.
+We find notable variation in systematic and idiosyncratic risk exposures across vintage
+years. While we do confirm betas in the vicinity of two for half of venture funds incepted
+during late 90s, three-quarters of venture funds incepted after 2004 have beta estimate of less
+than 1.4. However, the idiosyncratic risk of venture funds—which we measure as a multiple
+of GARCH(1,1)-filtered volatility of matching industry excess returns—has rebounded to a
+median of 3× from the 2× lows during 2000–2002. As far as temporal trends in buyout
+funds, we note an increase in systematic risk relatively to the levels in the 90s, and a spike
+in idiosyncratic risk during 2003-2005. The trends in PE fund abnormal returns are broadly
+consistent with those documented in prior literature.
+While, in principle, our method supports pooling cash flows and NAV data across funds,
+we find that this actually complicates the analysis for a few reasons. First, unlike the cash
+flow methods described above, our method does not require a balanced panel of capital calls
+
+4
+
+and distributions over different calendar time intervals to correlate with the sample of risk
+factor realizations. In fact, such a pooling implies strong assumptions—e.g., that funds’
+systematic and idiosyncratic risk exposures are exogenous from the risk factor realizations.
+Second, we find that averaging several funds with different data coverage quality tends
+to result in less precise estimates. Instead, it is more efficient and transparent to impute
+parameters that are not well-identifiable for a particular fund with peer-based aggregates
+or, even, theoretically motivated values. ‘Better data’ in our context means (i) distributions
+spanning multiple quarters, (ii) many NAV reports with variation from the previous quarter,
+and (iii) a substantially realized fund. This allows us to identify the fund risk exposures
+from the appraisal bias (i.e. NAV smoothing). However, provided that there are at least
+some meaningful distributions and consistency in NAV reports, we can still recover the
+fund-specific systematic risk, average abnormal return, and “unsmoothed” NAV estimates
+by treating some parameters as fixed.
+Our paper contributes to recent studies that aim at developing “matrix pricing” for the
+portfolios of PE funds using either secondary market trades in fund stakes coupled with
+a selection model as in Boyer et al. (2018) or a replication of the PE fund returns with
+holding-level matches to public comparable firms as in Stafford (2017). Our methodology
+effectively nests both approaches while allowing for fund-level heterogeneity in risk exposures
+and taking a more structural approach to modeling the fund return process during the
+periods in which the data are not observable.4 We also complement contemporaneous work
+by Gupta and Van Nieuwerburgh (2019), who use machine learning tools to estimate multifactor time-varying exposures from a panel of PE fund cash flows, as opposed to the bottomup approach that matches on portfolio companies’ characteristics. Both approaches can be
+used to construct the comparable public asset for our method. As one of many potential
+application of our fund-level approach, we demonstrate how asset allocation decisions using
+nowcasted NAVs would have been improved around the 2018 financial crisis (section 4.1).
+4
+
+Matching to the transaction-level public benchmarks is embedded in the construction of fund’s comparable asset, utilizing secondary price data amounts to augmenting the observations vector—see Section A.2.1.
+
+5
+
+We argue this case study to be instructive for the valuation challenges that PE fund investors
+face during the Covid-19 pandemic.
+With regards to methods, our study relates to the nowcasting macroeconomics literature which relies on SSM methods for the purpose of real-time monitoring of real activity
+(in particular GDP growth, see for example the survey of Bańbura et al., 2013), and the
+literature on forecast combination for the purpose of nowcasting (see, e.g. Andreou et al.,
+2013; Kuzin et al., 2013). The closest to our context application of the Kalman filter is
+in Korteweg and Sorensen (2010) who use venture-backed company valuation over several
+financing rounds and filter the latent value process in-between those rounds.
+While we show that our approach is reasonably robust to autocorrelation in the unobserved error terms and the fund idiosyncratic returns not being conditionally Gaussian, some
+of the funds’ data features massive outliers. For of all, if the tails are too heavy such that the
+variance is near infinite, then obviously the Kalman filter is ill-defined and MLE is infeasible.
+This might explain why our iterative procedure does not converge or results in implausible
+asset value estimates for about 10% of funds even if almost all parameters are fixed. Minor
+departures from normality typically preserve the attractive properties of the Kalman filter
+(see, e.g., Schick and Mitter, 1994), although inference is no longer efficient but asymptotically consistent (see for example the discussion regarding QMLE in Gourieroux et al. 1984).
+With mild departures, one typically finds residual autocorrelation which indeed also appears
+in some of our results. Nonetheless, the Kalman filter deteriorates in the presence of large
+outliers and results in invalid inference. There are some remedies for these situations—see,
+i.e., Durbin and Koopman (2000) and Durbin and Koopman (2012). They are usually either
+computationally involved or require strong auxiliary assumptions such as the precise nature
+of the heavy-tailed distribution. For start, we rely on the standard Kalman filtering procedure and simply discard the minority of cases whereby the procedure clearly fails. We leave
+the question of handling outliers and reducing misspecifications in modeling PE fund-like
+vehicles as SSM for future research.
+
+6
+
+2
+
+Nowcasting Model
+
+Nowcasting is a term coined in meteorology and pertains to the prediction of the present, the
+very near future and the very recent past. It has recently become popular in economics as
+a method for assessing the current state of an economy. For example, official gross domestic
+product (GDP) estimates are only determined after a long delay (and are even then subject
+to subsequent revisions) and nowcasting methods can be utilized to generate more timely
+estimates for policy and investment decisions.5 Nowcasting is intrinsically a mixed frequency
+data problem as the object of interest is a low frequency data series - observed say quarterly
+- whereas more real-time information (daily, weekly or monthly) during the quarter can be
+used to assess and potentially continuously update the state of the low frequency series, or
+put differently, nowcast the series of interest.
+There are two types of approaches. The first involves state space models featuring latent
+variables, whereas others are based on regression models.6 The fact that a critical part of
+our data, i.e. fund cash flows, is observed irregularly, directs our choice towards the SSM
+approach. We note that nowcasting can be performed without specifying a model. For
+example, PE practitioners often assume that the value of fund assets is equal to the manager
+as-reported net asset values on quarter-ends and use a public benchmark return and fund
+interim cash flows to interpolate values for dates of interest inside the quarter or extrapolate
+beyond the date of latest reported net asset value. This is a reasonable approach but it
+makes some very strong assumptions. We will therefore refer to it as a Naı̈ve nowcast of
+fund asset values and use it to evaluate the performance of our model-based nowcasts.7
+5
+
+See Ghysels et al. (2017) for a recent discussion on data revisions and its impact on financial markets.
+The SSMs are estimated via maximum likelihood and using Kalman filtering or smoothing to nowcast
+the series of interest. See Nunes (2005) and Giannone et al. (2008) for early examples. In Appendix A.1
+we provide a short intro to SSM. The second type of models involves MIDAS regressions, originated by
+Ghysels et al. (2006), which are regression models designed to handle data sampled at different frequencies.
+7
+Formally this approach is given by equation A.10 in Appendix, also referred to as “Rct -interpolated
+NAVs”. We also show that it corresponds to a particular parameterization of the fund-level SSM.
+6
+
+7
+
+2.1
+
+SSM Representation of a PE Fund
+
+We start with the characterization of the return and cash flow generating processes for a
+finite-life (usually around 10 years) PE fund. We assume that time t pertains to a weekly
+sampling scheme and use the following notations:
+• Ct – week t cash flows from investors to the fund (a.k.a., Capital Calls),
+• NAVt – fund net asset values reported at the end of week t,
+• Dt – fund distributions to its investors on week t,
+• Rmt – the systematic risk factor gross return during week t,
+• Rct – the average gross return on publicly traded assets comparable to fund in week t,
+• ht – the variance of idiosyncratic return on assets similar to those held by the fund t,
+• Rt – the gross return on fund asset for week t,
+• Vt – the true value of fund assets at the end of week t.
+Note that some of these series are latent. For example, the Vt series are not observed and,
+hence, neither are the Rt series. Other series are often missing at the weekly sampling
+frequency, for example NAVt is reported by the fund GPs approximately every 13 weeks.
+We assume that Rmt and Rct are observed (i.e. not missing) for every week t, and focus
+on a case of scalar Rct —i.e., the relevant asset returns are aggregated to a single index.
+Accordingly, we proxy for ht with a GARCH(1,1)-filtered variance of the idiosyncratic returns
+of Rct (from projection on Rmt ).
+Throughout the paper, we use capital letters to denote the levels of variables (e.g.,
+Dt for distribution amount) and lowercase to denote the natural logarithm thereof (rt =
+log(Rt ), dt = log(Dt ), etc.). A lower case letter followed by (·) refers to scalar-valued
+function, e.g. involving data, such as λ(·)t pertaining to λ at time t.
+
+8
+
+2.2
+
+Model Structure and Parameters
+
+We assume the following relations describe the fund return- and cash flow processes:
+
+
+Rt = α + β(Rmt − 1) + 1 eηt ,
+
+ηt ∼ N(0, F 2 · ht ),
+
+(1)
+
+Rct = ert ·βc +ψ+ηct ,
+
+ηct ∼ N(0, Fc2 · ht ),
+
+(2)
+
+Vt = Vt−1 Rt − Dt + Ct ,
+
+V 0 = C0 − D0 > 0
+
+(3)
+
+R0:t =
+
+t
+Y
+
+Rτ ≡ Vt · Mt ,
+
+(4)
+
+
+
+(5)
+
+τ =1
+
+
+
+r̄0:t = 1 − λ(·)t r0:t + λ(·)t r̄0:t−1 ,
+NAVt = er̄0:t −mt +nt ,
+
+
+Dt = δ(·)t Vt + Dt edt
+
+iff Dt > 0,
+
+nt ∼ N(0, σn2 )
+
+(6)
+
+dt ∼ N(0, σd2 ),
+
+(7)
+
+governed by the following set of parameters collectively referred to as θ:
+• β — fund market risk exposure;
+• α — the fund average return per week unexplained by the market risk;
+• βc and ψ — respectively, the slope and intercept from a regression of the comparable
+asset weekly log returns on those of the fund;
+• F and Fc — the scales for the conditional variance ht of distributions from which the
+innovations in returns, ηt and ηct , are independently drawn from;
+• λ — the structural parameter(s) of the fund appraisal bias function λ(·)t ;
+• δ — the structural parameter(s) of the fund distribution rule δ(·)t conditional on a
+distribution event on week t;
+• σn and σd – respectively, the standard deviations on the NAV reporting noise and
+distribution rule.
+It is worth emphasizing that we are agnostic about the economic interpretation of α-parameter.
+It could be, for example, a compensation for the liquidity risk incurred by the fund investors.
+Loadings on fund-specific liquidity risk proxies or other priced factors can be examined via
+
+9
+
+cross sectional regressions of fund-level α-estimates. Neither does this α reflect any market
+timing effects resulting from the schedule of fund cash flows as studied in Gredil (2018).
+Applying log transformations to equations (1) through (7), except for (5) which is already
+in log form, yields a SSM as detailed in Appendix Section A.2.8 As follows from equations (1)
+and (5) NAV appraisal bias is modeled as pertaining to both, systematic and idiosyncratic,
+components of fund returns. Also, because t indexes weeks, the model accounts for returns
+between the quarterly report dates. Accordingly, the predictable component of the appraisal
+bias is represented by the deterministic function λ(·)t which, in our baseline analysis, we
+assume to have the following form:
+λ(·)t : = λ · (1 − wt ) ,
+
+(8)
+
+where λ ∈ (.01, 0.99) is a scalar parameter reflecting the exponential moving average weight
+and wt ∈ [0, 1] are the observed fractions of the fund gross assets that the cash flow in period
+t comprises in the naı̈ve nowcast of fund asset value. This functional form implies a “firstin-first-out” assumption about the fund investment–divestment cycle. All else equal, funds
+that made substantial distributions recently would be assumed to have “less stale” NAVs.
+Meanwhile, the weight of returns occurring before period τ (0 < τ < t) in N AVt is limited
+by the fraction of fund capital invested before period τ .
+Note that, because equation (5) pertains to cumulative (i.e., since-inception) returns of
+the fund—R0:t , we actually model a smoothing of NAVs rather than smoothing of periodic
+returns. This is a particularly relevant perspective as it allows us to interpret the reported
+NAVs as a weighted-average of valuation snapshots taken at different points in the past.
+Furthermore, as follows from the equation, most of the weight may come from weeks within
+the past quarter (rather than from ending values of the previous quarters) corresponding
+to a realistic assumption about how the actual appraisal of fund assets is performed. This
+assumption distinguishes our approach from the extant literature that attempts to unsmooth
+8
+In addition, Appendix A.2.1 contains examples providing further intuition and discusses generalizations
+(e.g., incorporating longer-term or event-specific “memory”). Likewise, Appendix A.2.2 provides further
+generalizations (e.g., incorporating PE secondary market prices).
+
+10
+
+quarterly returns inferred from NAV changes.9 However, since PE funds normally incur
+interim capital calls and distributions, cumulative returns are generally not equal to the
+asset values (scaled by initial investment). Therefore we introduce a mapping function—Mt
+(which mt is a log of), implicitly defined by equations (4) and (6). It is a step-function which
+accounts for the history of cash flows and valuations and is further discussed in Section 2.4.
+For the distribution rule δ(·)t , we assume:
+δ(·)t : = min(0.99, δ · ty ) ,
+
+(9)
+
+where δ ∈ (0, 1) is a scalar parameter, whereas ty is the time (in years) elapsed since the fund
+inception. Constraining the domain of δ(·)t has clear economic intuition—until it is known
+that the fund is resolved, it has to be that Dt is non-negative and Vt > δ(·)t (Vt + Dt )edt .
+The economic interpretation for δ and σd is, respectively, the trend and the noise of
+the distribution density. Given equal number of distribution and intervals between them,
+funds with higher δ will tend to return capital faster. Overall there is relatively little insight
+that can be learned from (δ, σd ). One can think of these as just auxiliary parameters relating distributions—which reveal the true (i.e., unsmoothed value) of the parts of the fund
+portfolio—and the reported NAVs, therefore allowing for inference about λ and σn ). If the
+fund individual investments’ valuation reports and exit proceeds were observed, then δ(·)t
+need not be estimated. Instead it could be computed as a fraction of the previous quarter
+portfolio-level NAVs that the sold assets had comprised. Furthermore, under the assumption
+that the excess return (relative to the overall fund portfolio) is zero during the exit quarter,
+dt is also zero, which makes σd a redundant parameter too. In that case, dt + mt maps
+without uncertainty to the true to-date return r0:t .
+9
+
+See e.g. Ewens et al. (2013); Goetzmann and Phalippou (2019). Appendix shows that unsmoothing of
+the intra-quarter appraisal bias cannot be done using the inter-quarter returns only.
+
+11
+
+2.3
+
+Other Estimands of Interest
+
+Given the data observed for week t = 1, ..., T and parameters θ, we can apply the Kalman
+filter to obtain estimates of fund returns over each week.10 We then apply the mapping
+function Mt in equation (4) to obtain the estimate of the fund asset values. We use the
+following notation to emphasize that these estimates are functions of a particular θ and the
+θ,T
+ending period T : R̂tθ,T , R̂τθ,T
+, which are conditional on θ and data up to period T.
+:t , and V̂t
+
+Note that the parameters in θ are not necessarily obtained through econometric estimation.
+As discussed later, they can also be determined via imputations, or values taken from the
+prior literature.
+In some cases the returns and asset value nowcasts do not depend on whether one can
+actually estimate the parameter vector θ. For example, the naı̈ve nowcast that we described
+earlier is given by a θ in which βc = 1, Fc = σn = 0, and (α, β, F ) are given from a
+regression of Rct on Rmt . In other words, the filtering step is completely independent from
+the parameter estimation step that we discuss in the next section.
+For each fund and θ of interest, we compute:
+1. Variances and autocorrelations of the filtered weekly returns between t = 1 and t = T
+using the standard estimators at weekly and quarterly frequency;
+2. P M E(θ, T )0:t Kaplan and Schoar PMEs on a to-date basis (Brown et al., 2019) that
+utilize filtered returns and asset values along with the complete history of fund cash
+flows realized up to period t.
+3. P M E(θ, T )τ :t PMEs on the to-date basis in which capital calls up to period τ < t are
+θ,T
+replaced with V̂τθ,τ and R̂0:t
+are replaced with R̂τθ,T
+:t .
+
+While implausibly high (or low) variance and autocorrelations of filtered return in (1)
+provide straightforward diagnostics of the model misspecification and the sensitivity to different parametrizations, variables in (2)–(3) are the building blocks to nowcasting performance
+10
+
+We use backward recursion as given by equation (A.3) in the Appendix to utilize information before and
+after a given week to infer (i.e. filter) the return over that week as well the cumulative return up to it.
+
+12
+
+metrics. They are based on the simple idea that the NPV of cash flows will be zero if true
+fund returns are used for discounting. Specifically, we define the following three metrics, so
+that each can be interpreted as a fund-specific pricing error:
+1. In-Sample RMSE – mean squared difference of P M E(θ, T )0:t from one over the
+period t = τ0 , ..., τ where τ0 and τ are within the span of data used to estimate θ;
+2. Out-of-Sample (OOS) RMSE – mean squared deviation of P M E(θ, T )τ :T from
+one such that no fund-specific data beyond week τ − 1 is used to estimate θ;
+3. Hybrid RMSE – mean squared deviation of P M E(θ, T )0:t from one over periods
+t = τ, ..., T such that no fund-specific data beyond week τ − 1 is used to estimate θ. It
+is a hybrid between in-sample and out-of-sample data because, even though it utilizes
+the out-of-sample NAVs only, all since-inception cash flows are included. Therefore,
+the data partially overlaps with the estimation sample.
+The advantage of the OOS metric is that it directly compares the model-predicted asset
+values (with the information up to that date only) with subsequent realizations of the cash
+flows without a risk of over-fitting to the data used in either filtering or parameter estimation
+(which we discuss next). The OOS metric may be ambiguous to interpret for funds that are
+far from being resolved and lacks power when NAV reporting noise, σn , is very high.11 In
+contrast, the in-sample metric pertains to the structural stability of the model under the
+estimated parameters and averages-out the noise. However, it might not be informative if
+the parameter estimation (or return filtering) involves a minimand proportional to the square
+of logPME. In that sense, the Hybrid metric is a compromise that, at the very least, enables
+a comparison of the pricing errors under different θ for a given fund.
+11
+
+OOS metric will be biased towards rejecting our SSM estimates in favor of ’Rct -interpolated’-NAVs for
+unresolved funds. To see this, consider a situation in which there were no distributions after τ so that the
+’Rct -interpolated’-NAVs ratio will be exactly as in equation (A.10) yielding a zero error.
+
+13
+
+2.4
+
+Parameter Estimation
+
+We estimate the parameter vector θ for each fund in our sample using a combination of two
+methods: (i) maximum likelihood (ML) and (ii) (partial) imputation. In both cases, we
+utilize a penalty function in spirit of ridge estimators per Le Cessie and Van Houwelingen
+(1992), and an iterative procedure in spirit of Expectation Maximization (EM) algorithm
+per Dempster et al. (1977).
+As discussed in the introduction, our method exploits simultaneously cash flow and reported NAV information. It allows us to obtain fund-specific estimates of the parameter
+vector for a majority of funds, independently from data and/or parameters from other funds.
+Nevertheless, the span of distributions and innovations in NAV reports for many funds are
+simply insufficient to identify all parameters independently (the following section provides
+specific criteria). In such cases we resort to imputation. Another reason for adopting this
+strategy is that some parameters might not vary much across fund groups, so there are efficiency gains from imputing parameters across peer funds or using estimates reported in the
+existing literature. We also find that a partial imputation approach for parameters dominates
+the pooling of the data across funds.
+In the following subsections, we describe key steps and features of the two approaches we
+consider: (1) fund-specific estimates and (2) partially imputed methods. In both, we obtain
+standard error estimates for every parameter in θ using the numerical Hessian method as
+in Miranda and Fackler (2004). We conclude the section with a synopsis of Monte Carlo
+simulation results that illustrate parameter estimation efficiency and nowcasting performance
+across different degrees of model misspecification and data quality.12
+The important feature of PE fund data is that distributions almost never occur on the
+day of NAV reports. This fact allows us to identify σd from σn —the non-persistent noise
+parameter on NAV reports. Meanwhile, the sparseness and irregularity in the distribution
+12
+
+In the Appendix we provide (i) technical details about the estimation (Section A.3), (ii) a description of
+the Monte Carlo setup and results (Section A.4), as well as (iii) a single-fund case study that illustrates the
+intuition behind the key steps and assumptions (Section A.4.1).
+
+14
+
+and NAV vectors mitigates the effect of the autocorrelation in the observed residuals that
+arises due to the possible misspecification of both δ(·)t and λ(·)t . We scrutinize this claim in
+our simulation and empirical analysis.
+
+2.4.1
+
+Fund-specific estimates
+
+It is well established that identifying just α and β in PE is difficult even when data is
+pooled across many funds (e.g., see Ljungqvist and Richardson, 2003; Driessen et al., 2012;
+Ang et al., 2018). To estimate the 10-dimensional parameter vector θ by fund, we therefore
+proceed in two steps. The goal of the first step is to find the fund-specific α and β that fit
+the SSM well while satisfying an additional NPV-based restriction. We pursue this goal via
+a profile likelihood method augmented with a penalty function (see, e.g. Ghysels and Qian,
+2019, for details). In the second step, we iteratively estimate the remaining 8 parameters in
+θ and the value-to-return mapping function m̂t .
+To implement the first step, we build a 15-by-15 grid of plausible values for α and β
+based on range of estimates obtained from the prior literature. Specifically, in case of a
+buyout fund, β ranges between 0.668 and 1.831 with a mean of 1.25 and corresponding 15
+probability quantiles—0.01, 0.05, .125, ..., 0.875, 0.95, 0.99; guided by estimates in Ang et al.
+(2018).13 We center the α-range at the annualized estimate of fund-level excess returns from
+the Kaplan and Schoar (2005) PME method which happens to be 20.5% per year or 0.38%
+per week (see Appendix equation (A.11) for details). We consider seven equally spaced
+values up to +/-3.5% per year from the each side of the α-range center.
+For each of the 225 (α, β)-pairs on the grid we (i) obtain the likelihood score corresponding
+to the MLE estimate of (δ, λ, F, σn , σd ) in which (α, β) are kept fixed at the respective grid
+values and rct is dropped from the observations vector; (ii) evaluate the pricing error that
+the (α, β)-pair implies against the fund cash flows.14
+Following Ang et al. (2018), β ∼ N(1.25, 0.25), N(1.80, 0.30), and N(0.77, 0.23) for buyout, venture, and
+real estate funds respectively.
+14
+Regarding step (i), the last row in Z̃t and H̃t of the matrix representation of SSM in (A.1) are dropped
+while the transition equation remains unchanged. The comparable asset helps with nowcasting but is redun13
+
+15
+
+In the second step, we estimate the remaining 8 parameters (collected in the subvector
+ϑ), via maximum likelihood while keeping α and β at their optimized profile levels. We use
+Rct -interpolated NAVs as the estimate for Vt (see equation (A.8) for details) to construct the
+initial asset-to-value mapping. We then iteratively update the mapping function utilizing
+equations (A.14–A.16) and re-estimate ϑ using the new mapping until the change in those
+ϑ parameters from the previous iteration is below the threshold (eq. A.17).
+
+2.4.2
+
+Partially imputed estimates
+
+Here again we proceed in several steps. First, we estimate α, β, and λ. However, now we
+profile α and λ on a 15-by-7 grid, whereby the range for α is determined as before while λ
+is centered around that of the peer fund median. Recall that λ is essentially the exponential
+moving-average weight, constrained to be below 1 and above 0. We therefore, define the
+range of λ in terms of its probit function’s z-score distance from the center.15
+As for β, we treat it as a free parameter in the first step but constrained to vary within
+just one standard deviation (using again Ang et al. (2018) estimates by fund type) from that
+of the peer funds (henceforth, β-anchor). We continue applying the penalty function to the
+profiled likelihood grid. However, now the penalty measures the distance from zero for the
+autocorrelation of filtered returns (see Section 2.3) obtained from a nowcast with only Rmt .
+In doing so, we mitigate forcing too high or too low smoothing intensity upon the fund from
+its peers. We find this approach to be more informative about the (β, λ) pair location (than
+the PME-based penalty discussed above) when the fund exhibits only several quarters with
+meaningful distributions.16
+In the second step, we iterate the return-to-value mapping function and the remaining free
+parameters until convergence as we do with the fund-specific estimates, however we always
+keep F and σn fixed to the median of the peer funds. Therefore, this EM-like procedure
+dant for Rm -related parameter identification. Regarding step (ii) –see equation A.12.
+15
+We consider a range from −0.75 to +0.75 with 0.25 increment.
+16
+Effectively, this “nudges” lower autocorrelation magnitudes in the filtered return series.
+
+16
+
+(cfr. Dempster et al. 1977) involves only 5 parameters (rather than 8 under the fund-specific
+estimation approach).
+In both steps, the peer fund estimates are defined as medians of the respective parameter
+estimated independently. The next section examines several ways to define peer funds. We
+include the fund’s own fund-specific estimates to compute the peer group median. For β,
+we additionally consider setting the center of the distribution to be equal to the estimates
+in the literature by fund type (Ang et al., 2018).
+
+2.5
+
+Simulation Experiment Summary
+
+An extensive simulation study is conducted to examine the performance of our method with
+regards to both parameter estimation and nowcasting performance. One of the focus areas in
+this simulation experiment is the consequences of the model misspecification relatively to the
+true data generating process. For example, we introduce discontinuous jumps in the funds’
+idiosyncratic return processes (as in Korteweg and Nagel 2017) contrary to the assumption
+that those are conditionally Gaussian, and examine cases in which the assumed distribution
+function (equation 9) is different from the true one.
+For brevity, we defer the details to Appendix A.4 where we examine a single case step-bystep process and report extensive summaries for a realistic panel of simulated funds. Below
+we summarize the main takeaways.
+1. Nearly all parameters are consistently estimated despite realistically high idiosyncratic
+noise in fund returns (unconditionally 40% per year); the typical estimation error on
+fund-specific estimates (α, β, λ) is (0.002,0.359,0.054). Cross-sectional variation in α
+and β is statistically detectable within as few funds as a hundred.
+2. The only key parameter that is affected by non-Gaussian jumps in the true return
+process is the volatility scale F , which attenuates to a median of 1.5x from the true
+(assumed) level of 2.0, while the noise level in NAV reports is over-estimated with a
+0.055 median relatively to a true value of 0.050. However, this bias vanishes if deal17
+
+level NAVs are utilized (i.e. δ()˙ t and σd are computed rather than estimated), while
+the efficiency of α and β estimation approaches that of the weekly OLS regressions
+estimates that assume fund returns are observable). Reasonable misspecification of
+the distribution function has virtually no effect on the consistency and efficiency of key
+parameter estimates.
+3. Under the assumption that the true parameters are similar to those of the peer funds,
+partial imputation discussed in Section 2.4.2 reduces the estimation error on β and λ
+by a factor 1.2 to 1.6 but leads to slightly large estimation errors for α.
+4. Using the OOS metric, the median nowcast error is about 0.12 in the baseline fundspecific case (0.07 if deal-level data are utilized) versus 0.28 with naı̈ve nowcast, yielding
+an improvement of 74%. With respect to the Hybrid metric, the model estimates result
+in smaller nowcast errors for 85-95% of simulated funds and are on average 10-times
+smaller than those from naı̈ve nowcasts. Partial imputation of parameters also yields
+a modest improvement in the nowcasting performance.
+Overall, the simulations suggest that parameter estimation and nowcasting performance
+are promising using our methods and that the results are not particularly sensitive to distributional and functional form misspecifications.
+
+3
+
+Empirical Results
+
+In this section, we report results for parameter estimates and nowcasting performance for the
+sample of private equity funds provided by Burgiss (see Brown et al., 2015, for description).
+The data include fund-level history of cash flows between each fund and its investors, fund
+NAVs reports for most quarters, as well as time-invariant data such as fund strategy, vintage
+year, and industry based on 8 Global Industry Classification sectors. We use this industry
+designation to select a comparable asset as from the S&P500 [MSCI global] subindex for
+funds that are classified as focused on North America [Rest of the World] investments. We
+
+18
+
+use the CRSP value-weighted index for market returns.
+
+3.1
+
+PE Fund Sample
+
+Table 1 reports basic summary statistics separately for 1,437 buyout and 1,142 venture funds
+in Panels A and B, respectively.17 This is a subset of the Burgiss Manager universe as of
+December 2017. It includes the funds that satisfy the following criteria:
+• vintage year is between 1983 and 2008,
+• operated for at least 23 quarters,
+• reported NAV values for at least 10 quarters,
+• made at least two distributions,
+• have at least two peer funds for which we obtain fund-specific estimates (Section 2.4.1).
+The peers are defined as funds of the same type (i.e. buyout or venture) with vintage
+years within a year of the fund of interest, and the same size tercile within the strategy.
+For feasibility of fund-specific estimates, we additionally require at least five quarters during
+which the distributions exceed 5% of fund size and tighten the requirement for the fund
+resolution status so that the latest reported NAV does not exceed half of its cumulative
+distributions.
+These filters drop 119 buyout and 57 venture funds from our sample. We note that
+the excluded funds tend to have lower returns and smaller size. For example, the excluded
+venture funds had median size/PME of $27mln/0.76 as opposed to $163mln/0.81 for the
+included funds. These differences are even larger for the buyout sample at $49/0.95 for
+excluded and $399/1.06 for included. Nevertheless, once adjusted for vintage averages, the
+differences in performance are statistically insignificant (t-stat of -1.15 for the combined
+sample). Furthermore, the excluded funds comprise just less than 2% and 1%, respectively,
+of buyout and venture funds and of capital committed. We therefore argue that our estimates
+17
+We classify all none-venture equity-focused (i.e. not debt or mezzanine) funds as buyouts except growth
+equity / expansion capital. We examine subcategories later in our analysis.
+
+19
+
+are informative of the PE fund universe available for U.S. institutional investors. However,
+we do not claim that all our parameter estimates are free of possible selection bias. In
+particular, our approach effectively assumes that funds with larger number of distributions
+are more indicative of the systematic and idiosyncratic risk exposures within the respective
+fund cohort. We note however that this assumption is also present (but in a much stronger
+form) in studies that utilize only fund cash flow information for inference about PE riskreturn, as discussed in the introduction.
+The last rows of each panel show a cash flow characteristic that is important for the
+application of our method (see, e.g, the case study in Appendix Section A.4.1), the number
+of quarters with meaningful distributions. It follows that a quarter of buyout funds have
+5 or fewer quarters with distributions that exceed 5% of fund size. For venture funds the
+corresponding number is only 4. This reduces the feasibility of fund-specific estimates for the
+venture sample to a greater extent. We focus on relatively mature funds so we can evaluate
+the nowcasting performance.18
+
+3.2
+
+Fund-specific estimates
+
+Table 2 reports summary statistics for fund-specific estimates of SSM parameters and the
+assessment of the associated nowcasts. As described in Sections 2.4.1 and 3.1, identification
+of these utilizes only the data from the respective fund (besides any matched public benchmarks) and requires a relatively high number of quarters with substantial distributions made
+by the fund. We are able to obtain such fund-specific parameter estimates for 1,745 PE fund
+which corresponds to 62% of the fund sample described in Table 1. In subsequent sections,
+we will break down selected parameter and nowcasting metrics by fund type and provide a
+more granular analyses via multivariate regressions.
+18
+
+Appendix Table A.2 reports summary statistics for PE Real Estate funds, which we also examine in our
+study and apply similar filters to.
+
+20
+
+3.2.1
+
+Parameters
+
+Panel A of Table 2 displays selected statistics for the 10-dimensional parameter vector θ. We
+observe that the average [median] α of PE funds with fund-specific estimates is 4.8 [0.036]%
+per year with an interquartile range of 13.7%. As alluded to earlier, it is not necessarily
+representative of a typical fund’s risk-adjusted return since these funds are likely to have a
+greater fraction of successful deals that resulted in large distribution amounts happening at
+different points of their lives. The loading on the public market return is 1.19 on average,
+ranging from 0.668 at the 10th percentile to 1.979 at the 90th. It is somewhat lower than
+the 1.25 [1.80] mean βs for buyout and venture from Ang et al. (2018), which we used to
+build our profiling grids. This suggests that the penalized Likelihood attains its maximum
+at lower values for β..
+The third row of Panel A reports the scale coefficient estimate on our proxy of timevarying idiosyncratic risk. It shows that the standard deviation of idiosyncratic returns for a
+typical PE fund is 2.59 times the GARCH(1,1)-filtered idiosyncratic volatility of the matched
+industry index. However, we note the large dispersion for this parameter. While it is equal
+or smaller than 0.18 for 10% of the funds, it is greater than 5.49 for a quarter of funds. In
+fact, for over 10% of funds it hits the upper bound of 10 that we imposed in each estimation.
+This suggest that the idiosyncratic volatility parameter is hard to identify at the individual
+fund level. However, it seems plausible to assume F is similar across funds within the same
+strategy-, vintage-, and size cohort and we utilize this assumption subsequently.
+The next two rows of Panel A report summaries of parameters that characterize reporting
+quality by PE funds. First, as follows from the percentile ranks of λ, PE fund NAVs indeed
+tend to exhibit a very high degree of appraisal smoothing. The median of 0.951 implies
+that public market valuations from five or more weeks ago comprise 77.4% (= 0.9515 ) of a
+typical fund NAV report. This exponential weight is consistent with the AR(2) coefficients of
+about (0.5,0.3) on quarterly return series derived from reported NAVs. Our results suggest
+substantially less smoothing for about the bottom quarter of funds—e.g., λ is 0.869 or less,
+21
+
+suggesting persistence of only about 0.16 or less at quarterly frequency.
+We observe that the average [median] NAV noise—the standard deviation in NAVs that
+the SSM cannot attribute to past or future returns—is 4.6 [3.1]%. For some funds it appears
+to be implausibly high or low—e.g., 15.6% per the 90th percentile, the lower bound of 0.1%
+for over a quarter of funds. Thus, this parameter also appears hard to identify reliably. Just
+as with the idiosyncratic risk levels, we subsequently use the fact that these are plausibly
+similar across peer funds.19
+Panel A also reports δ and σd which govern the fund distribution process. While auxiliary in nature, they need to be estimated for each fund to reflect the heterogeneity in the
+distribution magnitudes (given the assumed functional form of δ(·)). Here we just note that
+for the vast majority of funds both parameters are well within the upper (0.9 and 4) or lower
+(0.001) bounds imposed on the estimation.
+The last three rows of Panel A report parameters that govern the mapping of the comparable asset to the latent fund returns at the weekly frequency, as per equation (2), representing
+the intercept, slope, and the variance scale. Because returns are in logs and the regression
+is essentially a reverse one (i.e. factor series on fund series), some caution is required with
+their interpretations. In particular, even though the average and median ψ are positive at
+about 3% per year, it does not mean that the funds underperformed those industry benchmarks since the intercept is shifted upward by the 0.5var(ηct )-term. Moreover, the average
+[median] βc of 0.79[.812] does not imply that rt are less risky than rct . Instead, βc is inversely
+proportional to the loading of rt on rct . Finally, all else equal, lower levels of Fc estimates
+can indicate two situations: (i) better match of the comparable asset to the fund, and/or (ii)
+overestimated risk level of the fund.20 For a given variance of rct and rmt , the variance of ηct
+has to go down if either β or F increases. Therefore, examining the nowcasting performance
+sheds light on whether we are in situation (i) or (ii).
+19
+
+Naturally they relate to fund investments’ type, portfolio diversification and operating period.
+To see this, approximate the log of equation (1) with rt = α∗ + βrmt + ηt , and substitute it in the log
+of equation (2). This results in rct = ψ + βc α∗ + βc βrmt + βc ηt + ηct .
+20
+
+22
+
+3.2.2
+
+Properties of filtered returns
+
+Panel B of Table 2 compares the autocorrelations and variances of fund returns obtained
+from a naı̈ve nowcast that uses reported NAVs with those from fund-specific SSM estimates.
+We compare series at two frequencies—weekly and quarterly. For the naı̈ve nowcast, the
+quarterly series correspond to NAV-changes adjusted for the value of within-quarter cash
+flows, discounted at the industry benchmark returns. Whereas the weekly naı̈ve nowcast
+assumes the asset values track the industry benchmark on top of the interpolated betweenquarter change in PME (as from equation A.10). We see that those series suggest a rather
+high positive autocorrelation of 41–56% for the typical fund and over 71–89% for a tenth of
+the sample. Interestingly though, for another tenth of the sample we observe no meaningful
+correlation in naı̈vely nowcasted returns. Meanwhile the variances subpanel, suggests that
+the annualized standard deviation of returns for the middle half of PE funds is between
+16.7% and 32.8%.
+The SSM-based return nowcasts are obtained via the Kalman filter at weekly frequency
+as explained in Section 2.3. We then aggregate these filtered estimates to the quarterly
+frequency by summation of the log returns within each quarter. Panel B shows that autocorrelation of SSM-based fund returns is virtually zero at both frequencies on average (and
+for the median fund) and is within 10% of zero at the weekly frequency for the middle two
+quartiles. Meanwhile, the variance of filtered returns is a factor of 2 to 2.6 higher than under
+the naı̈ve nowcast, suggesting the annualized standard deviations between 24.5% and 54.7%
+for the middle two-quartiles.
+While these results suggest the SSM-filtered returns are more representative of the true
+return process than one inferred from reported NAVs, we note that for a substantial minority
+of funds the SSM nowcast exhibit fairly extreme autocorrelations. For example, one-fifth of
+the fund sample exhibits the autocorrelation of filtered returns in excess of +0.47 or below
+-0.37 at the quarterly frequency. This is likely driven by the model (e.g., λ(·)t and δ(·)t ) or
+parameter misspecification, and can be addressed on the case-by-case basis in practice. We
+23
+
+also note that usage of the backward induction with the Kalman filter likely underestimates
+the variance of the latent return series, and, hence, overestimates the magnitude of the
+correlations.21 To examine the scope of this bias, the last row of Panel C reports the variance
+estimate of fund returns derived from the fund parameter and benchmark variance estimates.
+Indeed, we see that these are a factor of 1.5 higher than with filtered returns, suggesting that
+the typical PE fund total risk is about 44%, if measured by annualized standard deviation.
+
+3.2.3
+
+Nowcasting performance
+
+Panel C of Table 2 reports fund-level nowcasting performance metrics introduced in Section 2.3. First, we note that the out-of-sample RMSEs are similar to the in-sample RMSEs
+and are positively correlated, as evident from Figure 1 (especially on the pseudo-out-ofaample basis in Panel A). Thus, the in-sample pricing error is a useful predictor for nowcasting performance as suggested by the simulations discussed in Section 2.5.
+Second, SSM-based RMSEs are notably smaller than those from the naı̈ve nowcast, again
+as suggested by simulations. For a typical fund, the Hybrid RMSE reduces from 0.34 to
+0.097 while the fully-out-of-sample values drop from 0.25 to 0.146 and are sizable across
+all percentiles. Figure 2 shows that improvements are largest for funds with relatively large
+naı̈ve nowcast errors and that the SSM-based nowcasts are materially inferior to the reported
+NAVs only when the latter happen to be particularly good—e.g., to the left of log MSE of
+-5 on the x-axis, which corresponds to the RMSE of less than 8.2%.
+Across the buyout and venture sample, SSM-based nowcasts with fund-specific parameter
+estimates result in smaller Hybrid [OOS] RMSE than the naı̈ve nowcast for 80% [65%] of
+individual funds [untabulated]. Our analysis also indicates that the gains are higher when a
+portfolio of funds is concerned since the SSM-based nowcast errors are less correlated than
+those from the naı̈ve approach.
+21
+
+The fact that the autocorrelation magnitudes are notably smaller at weekly frequency is also consistent
+with this explanation since the bias gets cumulated within a quarter.
+
+24
+
+3.3
+
+Partially imputed estimates by fund type
+
+Next, we examine partially imputed parameter estimates as described in Section 2.4.2 and
+compare the nowcast performance with that generated by fund-specific estimates. Most
+importantly, the partial imputation enables us to obtain parameter estimates for approximately 95% of the sample funds and, therefore, provide a plausibly representative picture of
+the institutional PE fund universe.
+We consider three ways to define peer funds. First, in what we will refer to as Peerimputed we set F , σn as well as the centers of β-anchor and λ-grid to the median values
+of the respective fund-specific parameter values for funds of the same strategy (buyout of
+venture) incepted in the same or adjacent vintage year. Additionally, if there are three
+or more peer funds in the same size tercile, we limit the peer group to those peers funds
+only. We then attempt to further narrow the peer group to at least three funds in the same
+industry of specialization.
+Second, we take the opposite approach and set the four imputed values to the buyout
+or venture fund average in what we refer to as Average-imputed. Finally, we reset the βanchor to the strategy-specific estimate from Ang et al. (2018) in what we refer to Literatureimputed, while keeping λ-grid, F , and σn same as in the Average-imputed case.
+Accordingly, we compare the SSM nowcast performance metrics introduced in Section 2.3
+under these four different sets of parameters. This exercise sheds light on three important
+questions: (i) is there a meaningful time-series variation in PE fund risk-return profile,
+(ii) how big is the noise reduction benefit from restricting the fund-specific parameters,
+(iii) are our systemic risk exposure estimates more consistent with the fund-level cash flow
+observations than previously established in the literature?22
+22
+
+Ang et al. (2018) encompass the previous literature estimates as priors for Bayesian MCMC.
+
+25
+
+3.3.1
+
+Buyout funds
+
+Table 3 reports selected parameters estimates and nowcast performance metrics for the three
+imputation methods alongside with the fund-specific estimates. The latter are available for
+1,105 funds, while the partial imputation increases the coverage to 1,391 funds (96.7% of the
+sample per Panel A of Table 1). For the remaining 3.3% the MLE does not converge.
+In Panel A, we focus on how key parameter estimates, namely α and β, very across
+estimation methods. We observe that the average and median α estimates of 2.6 to 4.0% are
+lower for peer- and average-imputed estimates in comparison to the 5.2-5.3% in fund-specific
+estimates sample. However, these are still notably higher than the near-zero values for the
+literature-imputed estimates. These also stand out with notably higher βs at 1.55/1.59 on
+average/median, especially against the 1.04–1.10 range for mean and medians in fund-specific
+and peer-imputed cases.
+Additionally, in Panel A we examine the smoothing parameter λ, as well as the variance
+scale on comparable asset parameter, Fc , to support the diagnostics discussed in the closing
+paragraph of Section 3.2.1. We note that Fc levels go up in peer-imputed versus fund-specific
+and partially drop back with the average- and literature-imputed estimates. Meanwhile, we
+observe no meaningful variation in the smoothing rate across estimation types in means but
+a 3-5pp increase in percentiles below 75th as we go from the peer- to literature-imputed.
+Panel B reports quarterly autocorrelations and variances of filtered returns in comparison with those from the naı̈ve approach. The latter are computed for the partially-imputed
+sample and suggest similar levels of autocorrelation 40.5% as the fund-specific estimates
+sample reported in Table 2 (which includes venture funds), and a total level of risk corresponding to an annualized standard deviation of returns of 23% for a typical fund. We
+note that fund-specific and peer-imputed returns have very similar summary statistics, with
+the typical autocorrelation being a bit closer to zero for peer-imputed (0.026 versus 0.074)
+and the total risk corresponding to 33-34% return standard deviation per year.23 Mean23
+
+This is a result of “nudging” via the penalty function as discussed in section 2.4.2.
+
+26
+
+while, the filtered returns from average- and literature-imputed estimates have a factor in
+the range of 1.5–1.7 higher variances, which translates into annualized standard deviations
+of 41–44% for the median fund and over 51% for the funds in the top quartile of total risk.
+As for the autocorrelations, the interquartile ranges is similar to that of fund-specific and
+peer-imputed but shifted downwards by about 10pp and 15pp, respectively, for average- and
+literature-imputed.
+Finally, Panel C of the table reports summary statistics for the nowcasting performance
+and reveals that the partially-imputed estimates have lower nowcast errors and higher improvement rates relative to the naı̈ve nowcast on both Hybrid and OOS basis. However,
+performance monotonically declines as we move from peer- to literature-imputed estimates.
+For example, the median OOS RMSE with literature-imputed β-anchor is 0.173 and 27%
+higher than peer-imputed estimates but nevertheless 42% lower than the naı̈ve nowcast.
+Overall, Table 3 suggests the following conclusions. Peer-imputed estimates dominate
+other partially-imputed estimates and benefit from a noise suppression relative to the fundspecific estimates for a majority of cases. Nonetheless, heterogeneity in parameters appears
+genuine across buyout funds.24 Forcing higher levels of fund systematic risk tends to not
+reduce the autocorrelation magnitudes but, in contrast, seems to amplify the degree of model
+misspecification across buyout funds.
+
+3.3.2
+
+Venture funds
+
+Table 4 reports the same analyses as in Table 3 but for the venture fund sample. Fundspecific estimates are available for 640 funds, while the partial imputation increases the
+coverage to 1,052 funds (92.1% of the venture sample).
+From Panel A, we see that differences between the fund-specific and peer-imputed in α
+as well as β estimates for venture funds appear more stark than those in the buyout sample.
+At 1.196, the average peer-imputed β is 0.18 lower than that of fund-specific, albeit the
+24
+In untabulated analyses, we find that the performance gap between peer-imputed and fund-specific
+estimates vanishes with funds for which in-sample RMSE from SSM is better then from the naı̈ve approach.
+
+27
+
+difference in medians is less than half of that. Most notably, the mean [median] α estimates
+at 4.8 [0.5]% for fund-specific case are sharply higher than the 0.1 [-2.7]% levels for peerimputed case, and especially so when compared to -3.6 [-6.4]% in the literature-imputed
+case. As with buyouts, the latter case is characterized with more than 0.5 higher βs.
+Turning to the filtered return analyses in Panel B, we observe a similar pattern as with
+buyout funds. Namely, there is a notable and roughly equal reduction in autocorrelations
+relative to the naı̈ve method, and a shift towards negative levels for average- and literatureimputed relative to the fund-specific and peer-imputed. The gap in variances of filtered
+returns is less pronounced than in buyout sample. For venture, the literature-imputed estimates correspond to the median standard deviation of 46% annualized as opposed to 35-38%
+range with fund-specific and peer-imputed parameters.
+In Panel C of Table 4, we observe again a similar pattern as in the corresponding panel
+for buyout funds: peer-imputed parameters result in better nowcasts but further reducing
+variance in F and σn and/or nudging higher βs appears counter productive. We also note
+that, while SSM RMSEs are higher for the venture sample and do not shrink as much
+relatively to naı̈ve nowcast as they do with buyout funds, overall the improvement rate is
+actually slightly higher for venture funds. For example, 74.6% of venture funds have smaller
+OOS RMSE from SSM with peer-imputed parameters than from a naı̈ve nowcast for the
+respective fund, as opposed to 72.8% of buyout funds.
+It it important to note however that a β closer-to-one does not warrant better nowcasting
+performance. This is evident from Table A.2 in the Appendix, which reports a similar
+analyses for REPE funds. There again peer-imputed estimates result in best nowcasting
+performance with average β being indistinguishable from the literature-imputed levels and
+further below one for a typical fund.
+
+28
+
+3.4
+
+Discussion
+
+3.4.1
+
+Why do we find lower betas?
+
+Tables 3–4 provide evidence that our estimates of systematic risk level are lower while also
+more consistent with cash flows realizations of individual funds. This raises a question of why
+other studies found higher β levels for largely same PE funds. One potential explanation
+is that funds that have higher risk produce larger cash flows, especially, if higher risk is
+associated with higher abnormal returns which appears consistent with differences between
+α and β levels in the subsamples with fund-specific estimates and without.
+Table 5 tests this hypothesis more formally by regressing fund-level β estimates on fund
+characteristics. In specification 1, we regress β on α using fund-specific estimates in Panel
+A and peer-imputed in Panel B, while also controlling for fund industry and subtype fixed
+effects (discussed below). Both panels reveal a strong positive association between PE funds
+excess returns and systematic risk levels. Because β and α are jointly estimated, this regression result is prone to be affected by an omitted variable bias reflecting the joint estimation
+error. We note that such a bias would likely be reducing a positive relationship insofar that
+an understated β would result in higher α given the on average positive market returns. Nevertheless, in the remaining specifications we use explanatory variables that are independent
+from α estimate—namely, fund size, cumulative distributions and the number thereof—while
+not seeking to establish a causal relationship.
+Our preferred specification is 6, where we include cash flow characteristics as well additionally control for industry and market variance over the life-time of the fund. In both
+panels, we see that the fund β increases in fund size and the value of distributions it made.
+This explains why we find lower average and median βs. Prior studies have been answering
+a different question—what is the β of the panel of fund cash flows (rather than that of an
+average or typical fund).25
+25
+
+In untabulated analyses, we find that these results do not hold for the idiosyncratic risk level which falls
+in fund size and insignificantly relates to the fund’s cumulative distributions.
+
+29
+
+Figure 3 plots industry and fund subtype fixed effects from specification 6 of both panels.
+We see that the industry effects are in concordance with the general intuition that utilities,
+non-cyclical consumer goods and health care exhibit less systematic risk relatively to the
+‘Consumer Discretionary’-goods baseline, in contrast to ‘Energy’, ‘Telecoms’ and ‘Information Technology’. A similar pattern consistent with the economic intuition is observed for
+fund subtype fixed effects relatively to ‘buyout’ funds group that has the average beta of just
+over one, according to both sets of estimates. Interestingly, we see that late-stage venture
+funds have a positive fixed effect as high as early-stage funds for both fund-specific and
+peer-imputed estimates, and above that of generalists and expansion capital.
+It is also worth noting that prior studies’ inference about β may reflect the marginal
+utility to trade of investors in private companies or funds, rather than the risk of the underlying project cash flows. Consistent with this hypothesis, findings of higher level of systematic risk tend to rely on round-to-round valuation change of venture-backed companies
+(Korteweg and Sorensen, 2010) and secondary fund trades in buyouts (Boyer et al., 2018).
+Additionally, the contracts between portfolio firms and funds as well as between a fund and
+its investors likely further attenuate the risk at fund level. In both, the decision-makers (e.g.
+entrepreneurs and fund GPs) get an option-like payout which not only reduces the upside
+variation in fund cash flows but subsidizes them on the downside state-contingent cash flow
+rights (see, e.g., Kaplan and Strömberg, 2003).
+
+3.4.2
+
+Trends in PE fund risk
+
+The notable differences in nowcasting performance between the peer- and average-imputed
+estimates, suggest a meaningful variation in PE fund risk profiles. We depict this via a
+vintage-year box plot of α, β, and F in Figure 4.
+Panel A of the figure plots the results for the buyout sample. We see two clear spikes
+in the idiosyncratic risk exposures, during 1990-93 and then during 2002-05, which also
+happened to be the best vintages. The levels for the 2007-08 vintages appear moderate by
+
+30
+
+historical standards with excess returns turning slightly negative. As for systematic risk,
+the cross-sectional variation appears to dominate the time series trend. Nevertheless, there
+appears to be a shift towards consistently above-one median levels post-2000. However, three
+quarters of buyout funds have had β estimated at below 1.25 for each vintage since 2005.
+Panel B of the figure plots the results for venture sample. Here we note a clear spike in
+systematic risk exposures during the 1995–98 vintages, with top-quartile β being in vicinity
+of 2.0. We then observe a rapid decline towards sub-one β for more than half of the funds in
+2002 vintage and then a rebound towards 1.1–1.3 medians more recently. Nevertheless three
+quarters of venture funds have had β estimated at below 1.4 for each vintage since 2005 with
+αs starting exceed zero for about half of funds. Interestingly, there is a clear rebound in
+the idiosyncratic risk levels taken post-2002 even though the 2007-08 vintage seem to have
+scaled back to under 3× the level of public equities.
+
+4
+
+Selected applications
+
+4.1
+
+PE allocations and nowcasts around the GFC
+
+Naturally, the SSM-based nowcasts provide potentially superior basis for asset allocation
+decisions, especially after periods of very high or very low returns observed for the funds
+of interest and/or the relevant publicly traded assets. Fund investors that assume the as
+reported to be unbiased may significantly misjudge their current allocation to PE relatively
+to their desired levels.
+To illustrate this misvaluation argument and to examine the performance of the SSM
+nowcasts around the dramatic regime shifts, we examine the case of great financial crises
+of 2008. For this exercise, we restrict our sample to North America buyout and venture
+funds that were 5- to 8-years old as of the first half of 2007 and not fully resolved before
+2010. Additionally, to reduce the effect of outliers, we require that nowcasted NAVs are
+within 1/5× to 5× of the reported ones during 2007. This leaves us with 115 buyout and
+31
+
+219 venture funds. To measure nowcast performance, we rely on the OOS RMSE metric
+introduced in section 2.3, which we recompute for each fund-quarter between Q4 2006 and
+Q4 2009.26
+Figure 6 reports the results of this case study, separately for buyout and venture subsamples. In particular, panel A reports the 2007–2009 history of average fund NAV, the average
+value of public benchmark corresponding to each fund’s industry, and the average nowcasting error using the naı̈ve approach, which takes the reported NAVs as true, as introduced in
+Section 2. Both NAVs and public benchmark values are normalized to be one as of Q4 2006.
+The panel shows that the public markets rallied through Q3 2007. During that period, the
+growth in NAVs trailed that of the markets, and was actually negative in the buyout sample
+as those funds we making significant distributions to LPs (not plotted). As the distributions
+to LPs dried-up early in 2008, the NAVs of both buyout and venture funds fell at a lower
+rate than the public benchmarks. The differences in changes since Q1 2008 would suggest
+a 10-to-15% increase of the PE weight in a portfolio the reminder of which was invested in
+those public benchmarks.
+Panel A also illustrates an intutive trend that, as funds approach resolution, their reported NAVs gradually become more informative of the future distributions (discounted to
+the respective NAV date). The dashed line shows the drop in the naı̈ve nowcast error from
+the averages of 45 cents on the dollar to 25 [35] for buyout [venture funds].27
+Panel B indicates that the apparent outperformance of PE fund NAVs is due to the
+changes in the direction of the appraisal bias thereof. This is evident from the bar plot
+of the the ratio of reported NAVs to the corresponding SSM nowcasts. It follows that the
+average NAV has exceeded the SSM estimate by as much as 10% for the buyout funds in
+our cohort, and by as much as 25% in the venture cohort.
+Meanwhile the markered lines in panel B show that SSM nowcasts consistently outperform
+26
+
+For SSM-based nowcasts, we do not reestimate the parameters or filtered returns each quarter but use
+the same estimates as in Section 3.
+27
+The 10 percentage point gap that emerged between the two sabsamples is at least partially due to the
+2.3-year longer life of the venture subsample.
+
+32
+
+the Naı̈ve ones. This is evident from both ratios – the average SSM error to the average
+naı̈ve, and the count of funds with SSM outperforming the naı̈ve – being significantly below
+one, even when the naı̈ve nowcasting errors shrink as per panel A.
+Figure 6 provides another angle to assess the value of our fund-level nowcasts for portfolio
+choice. Because few (if any) investors invest in virtually every PE fund in the market, the
+means plotted in panel B might not be fully describe the valuation uncertainty faced by a
+typical PE investors. Accordingly, instead of the cross sectional means per panel B, the bars
+and the lines now reflect the standard deviations of the appraisal bias and nowcast errors
+across funds in a given quarter. It follows that the standard deviation of NAV bias spikes
+during the crises while the SSM nowcast error across funds drops.
+These results suggest that it is important to account for the fund-specific smoothing
+parameters and idiosyncratic return paths preceding the market crush. In other words, the
+assumption that appraisal bias is same across funds is not supported by the data.
+We argue that the takeaway from this GFC case study may apply to the asset valuation
+environment investors face amid the COVID-19 pandemic.
+
+5
+
+Conclusion
+
+This paper develops a new method that provides reliable estimates of PE fund asset values at
+high frequency while shedding light on rich temporal and cross section variation in manager
+risk and reporting quality characteristics even when only fund-level cash flows and NAVs are
+utilized. We show how this framework can be extended to incorporate other types of data,
+such as portfolio-level deals information, secondary transactions with fund stakes, etc. These
+new insights are of critical importance in light of continued growth of PE and other illiquid
+assets in the institutional portfolios and the increasingly high regulatory interest to the risks
+arising from these investments. Our results suggest that the risk-return profile of PE based
+on the samples from the 1990s are likely not representative of the currently operating funds.
+
+33
+
+Table 1. Fund sample summary statistics
+This table reports summary statistics for the sample of buyout (Panel A), and venture funds (Panel B)
+incepted between 1983 and 2008. For the fund to be included in our sample, it has to meet three criteria: (i)
+have been operating for at least 6 years since inception, (ii) have at least 20 NAV reports, (ii) have at least
+two peer funds which meet criteria for the estimation in which SSM parameters are obtained independently
+from other funds (see Section 3.1 for details). # of ’Capital Calls’, ’Distributions’, ’NAV reports’ count the
+respective data point for each fund during at most 12 years of fund operations (’Fund life’). Data beyond
+12th year of fund life are omitted. ’% Unresolved’ is the ratio of fund latest NAV report to the sum thereof
+with the cumulative distributions. The last two rows of each panel count the number of quarters with
+non-zero distributions or only when those exceed 5% of fund size.
+
+Panel A. Buyout funds
+mean
+Vintage year
+Fund size (USD mil.)
+Fund life (years)
+IRR(%)
+Money Multiple
+PME (v. CRSP VW)
+# Capital Calls
+# Distributions
+# NAV reports
+% Resolved
+# Quarters w/ Dist.> 0
+w/ Dist > 5% of Fund
+
+sd
+
+2001.6
+6.0
+939.0 1798.3
+11.2
+1.0
+11.6
+15.7
+1.7
+0.9
+1.2
+0.6
+31.9
+19.9
+30.3
+22.0
+19.7
+2.7
+83.8
+17.7
+8.5
+4.8
+5.7
+3.7
+
+skew
+
+Number of funds: 1,437
+p5
+p10 p25
+p50
+
+-1.1
+5.2
+-1.3
+1.0
+3.3
+1.9
+1.1
+2.9
+-0.8
+-1.7
+0.4
+0.9
+
+1983
+20
+8.04
+-24.2
+0.22
+0.15
+3
+3
+12
+17.8
+0
+0
+
+1989
+49
+9.17
+-9.43
+0.58
+0.39
+6
+7
+14
+44.2
+1
+1
+
+1998
+172
+10.5
+3.60
+1.20
+0.78
+17
+16
+18
+77.8
+5
+3
+
+p75
+
+p90
+
+p95
+
+2004 2006 2008 2008
+398.5 874 3671 9165
+12.0 12.0 12.0 12.0
+9.91 17.9 36.4 64.2
+1.57 2.04 3.12 5.26
+1.06 1.43 2.18 3.14
+28.5
+44
+68
+94
+26
+38
+69
+107
+20
+22
+23
+24
+90.1 96.1 99.6 99.9
+8
+12
+17
+20
+5
+8
+12
+17
+
+Panel B. Venture funds
+sd
+
+skew
+
+Number of funds: 1,142
+p5
+p10
+p25 p50
+
+p75
+
+1999.9 6.9
+254.5 323.6
+11.4
+1.0
+12.6
+40.1
+2.0
+2.8
+1.2
+1.7
+23.0
+16.1
+18.7
+13.8
+20.4
+2.5
+71.7
+24.8
+4.9
+3.7
+3.7
+3.0
+
+-0.9
+5.1
+-1.9
+5.6
+6.7
+6.4
+1.9
+1.8
+-1.2
+-0.9
+1.0
+1.2
+
+1981
+10
+8.15
+-31.5
+0.13
+0.10
+2
+1
+12
+6.10
+0
+0
+
+2006 2008 2008
+316 743 1530
+12.0 12.0 12.0
+14.3 63.7 197.9
+2.04 5.72 15.3
+1.24 3.25 10.1
+30
+52
+81
+25
+47
+64
+22
+23
+24
+93
+99.3 99.9
+7
+12
+16
+5
+10
+13
+
+mean
+Vintage year
+Fund size (USD mil.)
+Fund life (years)
+IRR(%)
+Money Multiple
+PME (v. CRSP VW)
+# Capital Calls
+# Distributions
+# NAV reports
+% Resolved
+# Quarters w/ Dist.> 0
+w/ Dist > 5% of Fund
+
+34
+
+1985
+25
+9.27
+-16.1
+0.31
+0.20
+4
+3
+15
+20
+0
+0
+
+1997 2000
+74
+163
+11.1 12.0
+-3.07 5.16
+0.82 1.34
+0.52 0.81
+12
+19
+9
+16
+19
+21
+56
+78.2
+2
+4
+1
+3
+
+p90
+
+p95
+
+Table 2. Summary of fund-specific estimates
+This table reports summary statistics parameter estimates and nowcasting performances metrics obtained
+with fund-level SSMs for the sample of buyout and venture funds described in Table 1. Panel A reports SSM
+parameters that are estimated independently for each fund as described in Section 2.4.1 using at least (most)
+four (seven) years. The return autocorrelations and variances in Panel B are computed from the full history
+of fund returns estimates. The nowcasting performance metrics in Panel C are as discussed in Section 2.3
+utilize at least [most] one [five] remaining years of fund life.
+
+mean
+
+Number of fund-estimates: 1,745
+skew
+p10
+p25
+p50
+
+sd
+
+p75
+
+p90
+
+Panel A. Parameter estimates
+Main parameters:
+α: Excess return (p.a.)
+β: Systematic risk
+F : Idiosync Volty (×)
+
+0.048
+1.19
+3.77
+
+0.14
+0.41
+3.21
+
+2.7
+1.1
+0.9
+
+-0.127
+0.668
+0.180
+
+-0.035
+0.962
+1.364
+
+0.036
+1.102
+2.591
+
+0.102
+1.399
+5.495
+
+0.265
+1.979
+10.00
+
+λ: NAV smoothing bias
+σn : NAV report noise
+
+0.88
+0.046
+
+0.20 −2.9
+0.058 2.4
+
+0.357
+0.001
+
+0.869
+0.001
+
+0.951
+0.031
+
+0.983
+0.059
+
+0.990
+0.156
+
+δ: Dist intensity trend
+σd : Dist intensity noise
+
+0.030
+2.56
+
+0.10
+0.52
+
+27.2
+0.5
+
+0.004
+1.792
+
+0.010
+2.187
+
+0.019
+2.512
+
+0.035
+2.875
+
+0.079
+3.496
+
+Parameter mapping to Comparable asset:
+ψ: log intercept to Fund (p.a.)
+0.026
+βi : beta on Fund return
+0.53
+Fc : IdVol vs Fund return (×)
+0.79
+
+0.11
+0.34
+0.42
+
+−0.9
+1.1
+0.6
+
+-0.148
+0.123
+0.100
+
+-0.041
+0.262
+0.546
+
+0.034
+0.469
+0.812
+
+0.097
+0.722
+0.998
+
+0.184
+1.156
+1.488
+
+Panel B. Filtered return properties
+Autocorrelations:
+Reported NAVs (quarterly)
+SSM estimates (quarterly)
+
+0.38
+0.042
+
+0.25
+0.25
+
+−0.9
+0.1
+
+-0.050
+-0.369
+
+0.239
+-0.133
+
+0.411
+0.051
+
+0.559
+0.201
+
+0.712
+0.472
+
+SSM estimates (weekly)
+Naive nowcast (weekly)
+
+0.013
+0.51
+
+0.19
+0.29
+
+2.0
+−0.3
+
+-0.141
+0.029
+
+-0.101
+0.266
+
+−0.060
+0.557
+
+0.052
+0.767
+
+0.422
+0.895
+
+Variances:
+Reported NAVs (quarterly)
+SSM estimates (quarterly)
+
+0.048
+0.085
+
+0.23
+0.37
+
+13.8
+27.2
+
+0.003
+0.006
+
+0.007
+0.015
+
+0.014
+0.031
+
+0.027
+0.072
+
+0.103
+0.263
+
+SSM estimates (weekly)
+SSM parameter-based (weekly)
+
+0.0037
+0.0067
+
+0.006
+0.007
+
+6.2
+1.1
+
+<0.001
+0.001
+
+0.001
+0.001
+
+0.002
+0.003
+
+0.004
+0.010
+
+0.013
+0.020
+
+Panel C. Nowcasted performance assessment
+In-Sample RMSE
+
+0.19
+
+0.19
+
+2.3
+
+0.041
+
+0.077
+
+0.128
+
+0.222
+
+0.637
+
+Hybrid RMSE SSM
+Hybrid RMSE Naive
+
+0.16
+0.54
+
+0.19
+0.55
+
+2.5
+1.8
+
+0.021
+0.061
+
+0.050
+0.178
+
+0.097
+0.341
+
+0.195
+0.657
+
+0.571
+2.032
+
+OOS RMSE Naive
+OOS RMSE SSM
+
+0.35
+0.24
+
+0.34
+0.33
+
+2.2
+4.3
+
+0.021
+0.011
+
+0.117
+0.065
+
+0.250
+0.146
+
+0.448
+0.290
+
+1.025
+0.734
+
+35
+
+Table 3. Buyout fund estimates comparison
+This table reports summary statistics on fund-level SSM parameter estimates (Panel A), fund quarterly
+return estimates (Panel B) and nowcasting performances metrics (Panel C) for buyout funds incepted between
+1983 and 2008. Section 2.3 defines the nowcasting performance metrics. Row titles indicate the method that
+parameter estimates were obtained with. Sections 2.4.1–2.4.2 describe the key differences between fundspecific and partially imputed parameter estimations. Section 3.3 describes the three different imputation
+methods we applied.
+Number of fund-level estimates: fund-specific—1,105, partially-imputed—1,391
+mean
+
+p25
+
+p50
+
+p75
+
+mean
+
+p25
+
+p50
+
+p75
+
+1.040
+1.089
+1.303
+1.593
+
+1.307
+1.290
+1.303
+1.750
+
+0.945
+0.920
+0.937
+0.967
+
+0.980
+0.965
+0.963
+0.967
+
+Panel A. Selected parameters
+α (p.a.)
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.052
+0.040
+0.036
+0.006
+
+−0.017
+−0.039
+−0.045
+−0.080
+
+β
+
+0.053
+0.031
+0.026
+−0.002
+
+0.114
+0.105
+0.105
+0.083
+
+1.098
+1.050
+1.132
+1.551
+
+0.839
+0.802
+0.803
+1.250
+
+Fc
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.838
+1.479
+1.072
+0.989
+
+0.570
+0.770
+0.710
+0.686
+
+λ
+0.842
+1.007
+0.918
+0.867
+
+1.030
+1.596
+1.217
+1.119
+
+0.859
+0.886
+0.880
+0.889
+
+0.843
+0.828
+0.849
+0.861
+
+Panel B. Fund return properties
+Quarterly return autocorrelation
+Naive nowcast
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.362
+0.067
+0.057
+−0.032
+−0.059
+
+0.216
+−0.100
+−0.142
+−0.222
+−0.247
+
+0.405
+0.074
+0.026
+−0.065
+−0.090
+
+0.548
+0.234
+0.222
+0.112
+0.075
+
+Quarterly return variance
+0.063
+0.076
+0.058
+0.069
+0.075
+
+0.007
+0.013
+0.017
+0.029
+0.034
+
+0.013
+0.027
+0.028
+0.043
+0.049
+
+0.029
+0.070
+0.049
+0.066
+0.073
+
+Panel C. Nowcast performance assessment
+Hybrid RMSE
+Naive nowcast
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.472
+0.148
+0.185
+0.201
+0.208
+
+0.174
+0.044
+0.049
+0.060
+0.067
+
+OOS RMSE
+
+0.329
+0.084
+0.099
+0.119
+0.126
+
+0.597
+0.177
+0.212
+0.229
+0.241
+
+0.345
+0.222
+0.174
+0.186
+0.201
+
+Hybrid Improvement Rate
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.781
+0.785
+0.761
+0.747
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+36
+
+0.110
+0.054
+0.047
+0.051
+0.053
+
+0.250
+0.124
+0.105
+0.111
+0.118
+
+0.463
+0.267
+0.207
+0.213
+0.221
+
+OOS Improvement Rate
+0.657
+0.728
+0.714
+0.696
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+Table 4. Venture fund estimates comparison
+This table reports summary statistics on fund-level SSM parameter estimates (Panel A), fund quarterly
+return estimates (Panel B) and nowcasting performances metrics (Panel C) for venture funds incepted
+between 1983 and 2008. Section 2.3 defines the nowcasting performance metrics. Row titles indicate the
+method that parameter estimates were obtained with. Sections 2.4.1–2.4.2 describe the key differences
+between fund-specific and partially imputed parameter estimations. Section 3.3 describes the three different
+imputation methods we applied.
+Number of fund-level estimates: fund-specific—640, partially-imputed—1,052
+mean
+
+p25
+
+p50
+
+p75
+
+mean
+
+p25
+
+p50
+
+p75
+
+1.102
+1.178
+1.297
+1.500
+
+1.548
+1.402
+1.629
+2.100
+
+0.960
+0.934
+0.965
+0.966
+
+0.985
+0.969
+0.980
+0.981
+
+Panel A. Key parameter estimates
+α
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.048
+0.001
+−0.007
+−0.036
+
+−0.062
+−0.114
+−0.122
+−0.155
+
+β
+
+0.005
+−0.027
+−0.039
+−0.064
+
+0.080
+0.058
+0.047
+0.023
+
+1.379
+1.196
+1.325
+1.720
+
+1.102
+0.802
+1.029
+1.500
+
+Fc
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.717
+0.900
+0.755
+0.722
+
+0.495
+0.577
+0.536
+0.544
+
+λ
+0.753
+0.829
+0.726
+0.704
+
+0.955
+1.073
+0.916
+0.864
+
+0.904
+0.909
+0.908
+0.917
+
+0.901
+0.862
+0.856
+0.906
+
+Panel B. Fund return properties
+Quarterly return autocorrelation
+Naive nowcast
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.380
+0.009
+0.037
+−0.015
+−0.039
+
+0.257
+−0.165
+−0.125
+−0.172
+−0.194
+
+0.414
+0.019
+0.014
+−0.037
+−0.060
+
+0.560
+0.172
+0.182
+0.109
+0.083
+
+Quarterly return variance
+0.060
+0.100
+0.074
+0.081
+0.091
+
+0.007
+0.019
+0.020
+0.031
+0.038
+
+0.013
+0.036
+0.031
+0.045
+0.052
+
+0.029
+0.076
+0.050
+0.064
+0.075
+
+Panel C. Nowcast performance assessment
+Hybrid RMSE
+Naive nowcast
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.551
+0.180
+0.151
+0.168
+0.183
+
+0.198
+0.061
+0.059
+0.075
+0.082
+
+OOS RMSE
+
+0.358
+0.112
+0.099
+0.124
+0.137
+
+0.636
+0.208
+0.176
+0.199
+0.221
+
+0.386
+0.237
+0.188
+0.218
+0.233
+
+Hybrid Improvement Rate
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.811
+0.864
+0.831
+0.809
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+37
+
+0.156
+0.075
+0.060
+0.072
+0.081
+
+0.301
+0.162
+0.136
+0.158
+0.173
+
+0.509
+0.298
+0.241
+0.286
+0.297
+
+OOS Improvement Rate
+0.633
+0.746
+0.721
+0.697
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+−
+−
+−
+−
+
+Table 5. Fund characteristics and Systematic risk exposure
+This table regresses PE fund-level β estimates on its α-estimates as well as selected fund characteristics.
+Panel A uses the sample of fund-specific estimates, while Panel B uses peer-imputed estimates. The sample
+includes PE funds described in Table 1 as well as REPE funds per Table A.2. ***/**/* denotes significance
+at 1/5/10% confidence level, t-statistics robust to error clustering at vintage level are reported in parentheses.
+
+Panel A. Fund-specific estimates
+(1)
+α estimate
+
+(2)
+
+(3)
+
+(4)
+
+(5)
+
+(6)
+
+0.252***
+(3.84)
+
+log(Fund Size)
+
+0.0156**
+(2.04)
+
+P
+log( Distributions/Size)
+
+0.0205
+(1.11)
+
+log(# of Distributions)
+Industry variance
+Market variance
+Industry FE
+Fund type FE
+
+Yes
+Yes
+
+Yes
+Yes
+
+Yes
+Yes
+
+Observations
+R2
+
+1,953
+0.252
+
+1,953
+0.247
+
+1,953
+0.246
+
+0.0364*** 0.0353***
+(4.30)
+(4.14)
+0.0712*** 0.0710***
+(3.39)
+(3.38)
+−0.0457*** −0.0977*** −0.0955***
+(−2.75)
+(−4.96)
+(−4.79)
+−0.0087
+(−1.18)
+−0.0167
+(−0.75)
+Yes
+Yes
+Yes
+Yes
+Yes
+Yes
+1,953
+0.249
+
+1,953
+0.258
+
+1,953
+0.259
+
+(5)
+
+(6)
+
+Panel B. Peer-imputed estimates
+(1)
+α estimate
+
+(2)
+
+(3)
+
+(4)
+
+0.122***
+(3.50)
+
+log(Fund Size)
+
+0.0255***
+(5.12)
+
+P
+log( Distributions/Size)
+
+0.0117
+(1.44)
+
+log(# of Distributions)
+
+0.00280
+(0.34)
+
+Industry variance
+Market variance
+Industry FE
+Fund type FE
+
+Yes
+Yes
+
+Yes
+Yes
+
+Yes
+Yes
+
+Yes
+Yes
+
+Observations
+R2
+
+2,758
+0.155
+
+2,758
+0.156
+
+2,758
+0.150
+
+2,758
+0.149
+
+38
+
+0.0330*** 0.0317***
+(5.96)
+(5.70)
+0.0332*** 0.0331***
+(3.22)
+(3.21)
+−0.0340*** −0.0318***
+(−3.06)
+(−2.84)
+−0.0120**
+(−2.57)
+−0.0319*
+(−1.87)
+Yes
+Yes
+Yes
+Yes
+2,758
+0.161
+
+2,758
+0.164
+
+Figure 1. Predictability of nowcasting performance
+This figure compares the logs of in-sample nowcasting error (x-axis) with those out-of-sample (y-axis) as
+defined in Section 2.3 using fund-specific estimates summarized in Table 2. A positive slope indicates that
+that SSM nowcasting precision is more predictable. Table 1 describes the sample.
+
+-10
+
+Pseudo Out-of-Sample logMSE
+-5
+0
+
+5
+
+Panel A: Hybrid metric
+
+-10
+
+-5
+
+In-Sample logMSE
+
+0
+
+5
+
+-20
+
+-15
+
+Out-of-Sample logSE
+-10
+-5
+
+0
+
+5
+
+Panel B: Out-of-Sample metric
+
+-10
+
+-5
+
+In-Sample logMSE
+
+39
+
+0
+
+5
+
+Figure 2. Nowcasting performance assessment
+This figure compares nowcasting errors from SSM (y-axis) using fund-specific estimates summarized in
+Table 2 with those from a naı̈ve method based on as=reported NAVs and matched benchmark returns. The
+metrics are defined in Section 2.3 and are based on the idea that the NPV of fund cash flows has to be zero
+if true returns are used to discount them.
+
+-10
+
+SSM estimates
+-5
+0
+
+5
+
+Panel A: Hybrid metric
+
+-10
+
+-5
+0
+as reported NAVs + matched Benchmark
+
+5
+
+-20
+
+-15
+
+SSM estimates
+-10
+-5
+
+0
+
+5
+
+Panel B: Out-of-Sample metric
+
+-20
+
+-15
+
+-10
+-5
+0
+as reported NAVs + matched Benchmark
+
+40
+
+5
+
+Figure 3. Fund characteristics and Systematic risk exposure
+This figure plots fixed effect estimates of regression of fund-level β estimates on fund characteristics corresponding to specification 6 of Table 5. The sample includes PE funds described in Table 1 as well as REPE
+funds per Table A.2. ***/**/* denotes significance at 1/5/10% confidence level with inference robust to
+clustering at vintage level. The baseline effects are, respectively, ‘Consumer discretionary’ and ‘Buyout’.
+
+Panel A: Industry fixed effects
+Fund-specific
+
+Peer-imputed
+
+.1
+
+***
+**
+
+*
+
+0
+
+**
+
+*
+
+-.1
+
+*
+
+-.2
+
+**
+
+-.3
+
+***
+
+Utilities
+
+Telecom
+
+Materials
+
+Industrials
+
+IT
+
+HealthCare
+
+Financials
+
+ConsumStapl
+
+Energy
+
+*
+
+Panel B: Fund type fixed effects
+
+.4
+
+Fund-specific
+
+Peer-imputed
+***
+
+***
+***
+
+.2
+
+***
+***
+
+***
+***
+
+0
+
+***
+
+***
+
+-.2
+
+**
+
+41
+
+Unknown
+
+Real Estate
+
+Natural Resources
+
+Late Stage
+
+Generalist
+
+Expansion Capital
+
+Early Stage
+
+***
+
+Figure 4. Trends in fund risk and returns
+This figure plots the time series and cross-sectional variation of selected fund-level parameters obtained
+partially-imputed from peers with fund-specific estimates as described in Sections 2.4.2 and 3.3. The “boxes”
+reflect the inter-quartile range and the median of the respective parameter over buyout (Panel A) or venture
+(Panel B) funds incepted in the year indicated on the x-axis. Outlier values are not depicted.
+
+Panel A: Buyout funds
+
+-.2
+
+0
+
+.2
+
+.4
+
+.6
+
+α: Excess return
+
+0
+
+.5
+
+1
+
+1.5
+
+2
+
+β: Market risk
+
+42
+
+2008
+
+2007
+
+2006
+
+2005
+
+2004
+
+2003
+
+2002
+
+2001
+
+2000
+
+1999
+
+1998
+
+1997
+
+1996
+
+1995
+
+1994
+
+1993
+
+1992
+
+1990
+
+1989
+
+1988
+
+1987
+
+1986
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10
+
+F: Idiosync. volatility scale
+
+Figure 5. Trends in fund risk and returns—(Continued )
+
+Panel B: Venture funds
+
+-.5
+
+0
+
+.5
+
+1
+
+1.5
+
+α: Excess return
+
+.5
+
+1
+
+1.5
+
+2
+
+β: Market risk
+
+43
+
+2008
+
+2007
+
+2006
+
+2005
+
+2004
+
+2003
+
+2002
+
+2001
+
+2000
+
+1999
+
+1998
+
+1997
+
+1996
+
+1995
+
+1994
+
+1993
+
+1992
+
+1990
+
+1989
+
+1988
+
+1987
+
+1986
+
+1
+
+2
+
+3
+
+4
+
+5
+
+F: Idiosync. volatility scale
+
+Figure 6. NAV bias and Nowcasting around the GFC
+This figure illustrates the application of SSM for asset allocation decisions concerning PE around dramatic
+shifts in public market valuations such as the financial crisis of 2008. The subsample for this exercise includes
+115 buyout funds (left-hand charts) and 219 venture funds (right-hand charts). All funds satisfy the following
+criteria: (i) were between 5 and 8 years old as of the beginning of 2007, (ii) were not fully resolved before the
+beginning of 2010, and (iii) had the ratio of the reported NAVs to SSM-estimated values between 0.20 and
+5.0 during 2007. Panel A plots the average as-reported NAVs and industry benchmark cumulative returns,
+both normalized by the level Q4 2006, against the mean nowcasting error on the out-of-sample basis using
+the naı̈ve approach (section 2.3). Panel B shows the time series estimates of the average appraisal bias inherit
+in the reported NAVs and the extent of SSM-based nowcast improvement relatively to the naı̈ve approach.
+Panel C shows the cross sectional variation in the NAV bias estimates and the SSM-based nowcast error
+during the period between Q4 2006 and Q4 2009. Section 4.1 provides details.
+
+Panel A: Reported NAVs and naı̈ve nowcasts
+Venture
+.6
+.5
+.4
+
+1
+
+.2
+
+.3
+
+.8
+.6
+
+2007q1
+
+2007q3
+
+2008q1
+
+2008q3
+
+2009q1
+
+2009q3
+
+2007q1
+
+As Reported NAVs -- left axis
+Naive Nowcast Error -- right axis, per $1 of NAV
+
+2007q3
+
+2008q1
+
+2008q3
+
+2009q1
+
+2009q3
+
+2009q1
+
+2009q3
+
+Public Benchmark Index -- left axis
+
+Panel B: SSM-based inference – means across funds
+Venture
+
+.2
+
+-.1
+
+.4
+
+0
+
+.6
+
+.1
+
+.8
+
+.2
+
+1
+
+Buyout
+
+2007q1
+
+2007q3
+
+2008q1
+
+2008q3
+
+2009q1
+
+2009q3
+
+2007q1
+
+(Reported NAV)/(SSM-based NAV)-1 -- left axis
+Fraction of funds with SSM Nowcast better than Naive -- right axis
+
+2007q3
+
+2008q1
+
+2008q3
+
+(SSM Nowcast SE)/(Naive Nowcast SE) -- right axis
+
+Panel C: SSM-based inference – standard deviations across funds
+Venture
+
+.3
+
+.4
+
+.2
+
+.5
+
+.3
+
+.6
+
+.7
+
+.4
+
+Buyout
+
+.1
+
+per $1 of 4q06 NAV
+
+1.2
+
+Buyout
+
+2007q1
+
+2007q3
+
+2008q1
+
+2008q3
+
+2009q1
+
+2009q3
+
+2007q1
+
+(Reported NAV)/(SSM-based NAV) -- left axis
+
+2007q3
+
+2008q1
+
+2008q3
+
+2009q1
+
+SSM Nowcast Error -- per $1 of NAV, right axis
+
+44
+
+2009q3
+
+References
+Albuquerque, R. A., Cassel, J., Phalippou, L., Schroth, E. J., 2018. Liquidity provision in the
+secondary market for private equity fund stakes. Oxford University Working Paper .
+Andreou, E., Ghysels, E., Kourtellos, A., 2013. Should macroeconomic forecasters use daily financial
+data and how? Journal of Business and Economic Statistics 31, 240–251.
+Ang, A., 2014. Asset management: A systematic approach to factor investing. Oxford University
+Press.
+Ang, A., Chen, B., Goetzmann, W. N., Phalippou, L., 2018. Estimating private equity returns from
+limited partner cash flows. Journal of Finance 73, 1751–1783.
+Ang, A., Papanikolaou, D., Westerfield, M. M., 2014. Portfolio choice with illiquid assets. Management Science 60, 2737–2761.
+Bańbura, M., Giannone, D., Modugno, M., Reichlin, L., 2013. Now-casting and the real-time data
+flow. In: Elliott, G., Timmermann, A. (eds.), Handbook of Economic Forecasting, Volume 2 Part
+A, Elsevier, pp. 195–233.
+Boyer, B., Nadauld, T. D., Vorkink, K. P., Weisbach, M. S., 2018. Private equity indices based on
+secondary market transactions. National Bureau of Economic Research Working Paper .
+Brito, N. O., 1977. Marketability restrictions and the valuation of capital assets under uncertainty.
+Journal of Finance 32, 1109–1123.
+Brown, G. W., Gredil, O. R., Kaplan, S. N., 2019. Do private equity funds manipulate reported
+returns? Journal of Financial Economics 132, 267–297.
+Brown, G. W., Harris, R. S., Jenkinson, T., Kaplan, S. N., Robinson, D., 2015. What do different
+commercial data sets tell us about private equity performance? University of North Carolina
+Working Paper .
+Buchner, A., Stucke, R., 2014. The systematic risk of private equity. Passau University Working
+Paper .
+Cochrane, J. H., 2005. The risk and return of venture capital. Journal of Financial Economics 75,
+3–52.
+De Jong, P., 1988. The likelihood for a state space model. Biometrika 75, 165–169.
+Dempster, A. P., Laird, N. M., Rubin, D. B., 1977. Maximum likelihood from incomplete data via
+the em algorithm. Journal of the Royal Statistical Society: Series B (Methodological) 39, 1–22.
+Driessen, J., Lin, T.-C., Phalippou, L., 2012. A new method to estimate risk and return of nontraded
+assets from cash flows: the case of private equity funds. Journal of Financial and Quantitative
+Analysis 47, 511–535.
+Durbin, J., Koopman, S. J., 2000. Time series analysis of non-gaussian observations based on state
+space models from both classical and bayesian perspectives. Journal of the Royal Statistical
+Society: Series B (Statistical Methodology) 62, 3–56.
+
+45
+
+Durbin, J., Koopman, S. J., 2012. Time series analysis by state space methods, vol. 38. Oxford
+University Press.
+Ewens, M., Jones, C. M., Rhodes-Kropf, M., 2013. The price of diversifiable risk in venture capital
+and private equity. Review of Financial Studies 26, 1854–1889.
+Franzoni, F., Nowak, E., Phalippou, L., 2012. Private equity performance and liquidity risk. Journal
+of Finance 67, 2341–2373.
+Gârleanu, N., 2009. Portfolio choice and pricing in illiquid markets. Journal of Economic Theory
+144, 532–564.
+Ghysels, E., Horan, C., Moench, E., 2017. Forecasting through the rearview mirror: Data revisions
+and bond return predictability. Review of Financial Studies 31, 678–714.
+Ghysels, E., Qian, H., 2019. Estimating MIDAS regressions via OLS with polynomial parameter
+profiling. Econometrics and Statistics 9, 1–16.
+Ghysels, E., Santa-Clara, P., Valkanov, R., 2006. Predicting volatility: getting the most out of
+return data sampled at different frequencies. Journal of Econometrics 131, 59–95.
+Giannone, D., Reichlin, L., Small, D., 2008. Nowcasting: The real-time informational content of
+macroeconomic data. Journal of Monetary Economics 55, 665–676.
+Goetzmann, William N. and, E. G., Phalippou, L., 2019. How alternative are private markets?
+Yale University Working Paper .
+Goetzmann, W. N., Gourier, E., Phalippou, L., 2018. How Alternative Are Alternative Investments?
+The Case of Private Equity Funds. Yale School of Management Working Paper .
+Gornall, W., Strebulaev, I. A., 2017. Squaring venture capital valuations with reality. Journal of
+Financial Economics, forthcoming .
+Gourieroux, C., Monfort, A., Trognon, A., 1984. Pseudo maximum likelihood methods: Theory.
+Econometrica pp. 681–700.
+Gredil, O., 2018. Do private equity managers have superior information on public markets? Available at SSRN 2802640 .
+Gredil, O., Griffiths, B. E., Stucke, R., 2014. Benchmarking private equity: The direct alpha
+method. Tulane University Working Paper .
+Gupta, A., Van Nieuwerburgh, S., 2019. Valuing private equity investments strip by strip. New
+York University Working Paper .
+Kalman, R. E., 1960. A new approach to linear filtering and prediction problems. Journal of Basic
+Engineering 82, 35–45.
+Kaplan, S. N., Schoar, A., 2005. Private Equity Performance: Returns, Persistence, and Capital
+Flows. Journal of Finance 60, 1791–1823.
+Kaplan, S. N., Strömberg, P., 2003. Financial contracting theory meets the real world: An empirical
+analysis of venture capital contracts. The review of economic studies 70, 281–315.
+
+46
+
+Kohn, R., Ansley, C. F., 1989. A fast algorithm for signal extraction, influence and cross-validation
+in state space models. Biometrika 76, 65–79.
+Korteweg, A., Nagel, S., 2016. Risk-Adjusting the Returns to Venture Capital. Journal of Finance
+71, 1437–1470.
+Korteweg, A., Nagel, S., 2017. Risk-Adjusted Returns of Private Equity Funds: A New Approach.
+University of South California Working Paper .
+Korteweg, A., Sorensen, M., 2010. Risk and return characteristics of venture capital-backed entrepreneurial companies. Review of Financial Studies 23, 3738–3772.
+Kuzin, V., Marcellino, M. G., Schumacher, C., 2013. Pooling versus model selection for nowcasting GDP with many predictors: Empirical evidence for six industrialized countries. Journal of
+Applied Econometrics 28, 392–411.
+Le Cessie, S., Van Houwelingen, J. C., 1992. Ridge estimators in logistic regression. Journal of the
+Royal Statistical Society: Series C (Applied Statistics) 41, 191–201.
+Ljungqvist, A., Richardson, M., 2003. The cash flow, return and risk characteristics of private
+equity. National Bureau of Economic Research Working Paper .
+Longstaff, F. A., 2001. Optimal portfolio choice and the valuation of illiquid securities. Review of
+Financial Studies 14, 407–431.
+Miranda, M. J., Fackler, P. L., 2004. Applied Computational Economics and Finance. MIT press.
+Nadauld, T. D., Sensoy, B. A., Vorkink, K., Weisbach, M. S., 2016. The liquidity cost of private
+equity investments: Evidence from secondary market transactions. National Bureau of Economic
+Research Working Paper .
+Nunes, L. C., 2005. Nowcasting quarterly GDP growth in a monthly coincident indicator model.
+Journal of Forecasting 24, 575–592.
+Schick, I. C., Mitter, S. K., 1994. Robust recursive estimation in the presence of heavy-tailed
+observation noise. The Annals of Statistics pp. 1045–1080.
+Stafford, E., 2017. Replicating private equity with value investing, homemade leverage, and holdto-maturity accounting. Harvard University Working Paper .
+Woodward, S. E., Hall, R. E., 2004. Benchmarking the returns to venture. National Bureau of
+Economic Research Working paper .
+
+47
+
+Appendix
+A.1
+
+Review of State Space Models
+
+Following a slightly modified notation from Durbin and Koopman (2012), the general linear Gaussian SSM can be written as
+yt − Γ̃t xt = Z̃t st + t , ,
+
+t ∼ N(0, H̃t ),
+
+st+1 = G̃t st + Ṽt ηt , ,
+
+ηt ∼ N(0, Q̃t ),
+
+t = 1, ..., T,
+
+(A.1)
+
+where yt is a p-by-1 vector of data observable at period t with some (or all) entries possibly being
+missing, xt —a n-by-1 vector of observable regressors that explain the variation in yt , st —a m-by-1
+vector of unobserved state that explains the residual variation in the data (i.e., yt − Γ̃t xt ) up to
+mutually and temporarily uncorrelated vectors of normally distributed shocks t and ηt . The first
+equation in (A.1) is referred to as observation or measurement while the second equation, which
+describes the evolution of the latent state, is referred to as state or transition equation. The initial
+state value s0 is either known or drawn from a normal distribution as well while being independent
+from t and ηt .
+The matrices (Γ̃t , Z̃t ,G̃t , Ṽt ) and (H̃t ,Q̃t ) can all be time-varying but deterministic functions of
+observed data and/or some parameters θ. Moreover, G̃t−1 and Z̃t can depend on y1 , ..., yt−1 . It is
+intuitive to think about Z̃t and H̃t as measuring sensitivity of the observed data to, respectively,
+the state level and to the noise normalized to unit variance.
+The important advantage of the SSM approach to a problem is that, given θ, the system (A.1)
+enables extracting the expected value estimates of the latent state series st . The most famous
+application of this method for Gaussian SSMs is the Kalman filter (Kalman, 1960) in which the
+Projection theorem leads to the following standard results derived recursively from t = 1 to t = T :
+
+h
+i
+
+ilter
+(A.2)
+= G̃t sft ilter + K̃t ytresid − Z̃t sft ilter = E st Yt
+sft+1
+
+
+F̃t = Z̃t P̃t Z̃t0 + H̃t = var ytresid − Z̃t sft ilter Yt−1
+
+
+P̃t|t = P̃t − P̃t Z̃t0 F̃t−1 Z̃t P̃t = var sft ilter Yt
+P̃t+1 = G̃t P̃t|t G̃0t + Ṽt Q̃t Ṽt0
+where K̃t = G̃t P̃t Z̃t0 F̃t−1 is the Kalman Gain, and ytresid := yt − Γ̃t xt while Yt denotes the set of
+the past observations, (y1resid 0 , . . . , ytresid 0 )0 . The equations in (A.2) are also called the Forward
+recursion as they estimate of state st increments forward each period as new information becomes
+available. However, depending on the problem under consideration, it may be appropriate to
+condition on the observations from future periods τ, t < τ < T , as well to form the estimate of the
+state value as of t. This is known respectively as Kalman smoother and backward recursion. It can
+be defined as an adjustment to the estimates from Forward recursion:
+h
+i
+f ilter
+ssmooth
+=
+s
++
+P̃
+b
+=
+E
+s
+Y
+,
+(A.3)
+t
+t−1
+t
+T
+t
+t
+
+ 
+0
+
+P
+where bt−1 = Z̃t0 F̃t−1 yτresid − Z̃τ sfτ ilter + G̃t − K̃t Z̃t bt and: P̃t bt−1 = Tτ=t cov sft ilter , yτresid −
+
+
+
+Z̃τ sfτ ilter F̃τ−1 yτresid − Z̃τ sfτ ilter since ηt and t are mutually and temporarily independent.
+A final word about estimation, which uses the maximum likelihood principle. Suppose we collect
+all the parameters governing the matrices Γ̃t , Z̃t , G̃t , Ṽt , H̃t , Q̃t , G̃t−1 , Z̃t , Z̃t , and H̃t , is denoted θ
+∈ Θ. We will denote the Gaussian likelihood given the data and parameter vector by L((yt , xt ), t =
+1, . . . , T ; θ) (see again Durbin and Koopman (2012) for details of the likelihood fn specification).
+
+Appendix - 1
+
+A.2
+
+SSM Representation of PE Fund - Details
+
+We proceed with casting the equations (1) through (7) as a SSM per equation (A.1):
+yt = [dt−1 navt−2 rc,t ]0 ,
+Γ̃t = I3×3 ,
+
+
+
+
+
+rt
+δ(·)t
+0 1 0 log 1−δ(·)t
+
+r
+,
+Z̃t =  0 0 1
+st = r̄0:t−1  ,
+0
+0:t−2
+βc 0 0
+ψ
+1
+
+
+0
+0
+0
+αβ(·)t+1
+1
+0
+0 
+1 
+
+,
+G̃t = 
+0
+1 − λ(·)t−1
+λ(·)t−1
+0 
+0
+0
+0
+1
+
+xt = [m̂t−1 m̂t−2 0]0 ,
+
+
+σd 0
+0
+0 ,
+H̃t =  0 σn
+p
+0 0 Fc ĥt
+ 
+F
+q
+0
+Ṽt =  0  , Q̃t = ĥt+1 ,
+
+(A.4)
+(A.5)
+
+(A.6)
+
+0
+
+where dt is set to missing values whenever Dt = 0 (i.e., all but 20-30 weeks), navt is set to missing
+values whenever the NAV report from GPs is not available (i.e., normally 12 weeks out of 13), and
+
+
+αβ(·)t := log α + β(Rmt − 1) + 1 .
+(A.7)
+Let us first discuss the state vector st appearing in equation (A.5). The first entry of the state
+vector is defined as rt = αβ(·)t + ηt , corresponding to the log of equation (1). The last element of
+the state vector st is a constant, while the other two simply accumulate the realizations of rt since
+the fund inception at t = 0 until t − 1 or t − 2, respectively denoted r0:t−1 and r̄0:t−2 , and then
+produce the exponentially moving average thereof so that they could be related to the observed fund
+distributions and NAV reports respectively. Note that this introduces nonstationarity into the state
+space models, since the cumulative sums are trending series. This is a topic worth discussing here.
+As highlighted by De Jong (1988) and Kohn and Ansley (1989), among others, while state space
+models can be applied to nonstationary process, provided that the initialization of the Kalman filter
+is handled properly. It is worth highlighting that we do not face this problem because the start
+values for r0:t−1 and r̄0:t−2 are in both cases r0 , a stationary series with well defined unconditional
+mean and variance. This implies that the initialization of the Kalman filter is standard.
+Next we discuss the vector of observables, denoted yt appearing in equation (A.4). The only entry
+without missing values for any weeks is the comparable asset return, rct , which ideally should be
+a portfolio of the publicly traded assets matched to the fund holdings as of the beginning of week
+t. The weekly observed process rct relates directly to that key state variable, i.e. the fund latent
+return series, rt , through the loading βc with a heteroskedastic unobserved error, ψ + ηt .
+The other two elements of yt , namely dt−1 and navt−2 , reflect the up-to-period t history of fund
+cash flows and, therefore, cannot be mapped to the fund since inception returns directly. Instead,
+they are converted to returns via the mapping function mt which is implicitly defined by equations (4) and (6). These mapping functions are step-functions that increment whenever the fund
+makes distributions or capital call (as follows from equation (3), note that it is undefined for the
+last period since VT is zero - in this case, mT −1 should be used):
+
+
+mt − mt−1 = log (Vt + Dt − Ct )/Vt .
+(A.8)
+However, since the true fund asset values are unobserved, the vector of regressors xt contains the
+correspondent lags of the best feasible estimates of mt that are filtered from an auxiliary SSM
+parametrized with the same θ as the PE fund SSM described in Section 2.4.
+The other latent process featuring in both H̃t and Q̃t is the stochastic variance factor ht , which
+scales distributions of idiosyncratic return shocks: ηt and ηct . We obtain a proxy of it from a weekly
+frequency GARCH(1,1)-filter of comparable asset returns Rct orthogonalized with respect to the
+risk-factor returns Rmt . We estimate the GARCH models separately and ignore the estimation
+uncertainty caused by the plug-in method we use for volatility in the model.
+
+Appendix - 2
+
+A.2.1
+
+NAV smoothing and noise
+
+Equations (5), (6) and (8) assume that the NAV appraisal process is governed by a parametric
+function λ(·)t and a mean-zero noise nt parametrized by time-invariant σn . It is important to
+note that smoothing pertains to both systematic and idiosyncratic component of fund returns and
+accounts for the path of returns between the quarterly report dates as t indexes weeks. Following
+equation 8, λ ∈ (0.01, 0.99) is the structural parameter to be estimated while wt ∈ [0, 1] is the
+observed values reflecting the fraction of the fund assets that the cash flow in period t comprises.
+Below we provide some examples.
+Consider a period when distribution Dt fully resolves the fund so that residual NAV is known to
+ˆ t + Dt ) = 1. Consequently, from equations (5) and (8), it
+be zero. For this case, w̃t = Dt /(N AV
+follows that the “smoothed” return to-date equals the true one regardless of λ:
+
+
+r̄0:t = 1 − λ(1 − w̃t ) r0:t + λ(1 − w̃t )r̄0:t−1
+
+
+= 1 − λ · 0 r0:t + λ · 0 · r̄0:t−1
+Suppose that wt = 0.5 instead, which would be the case if Ct doubles the fund capital invested
+ˆ t ). If the fund GPs put only half of the weight on
+or Dt resolves the fund by half (i.e., Dt = N AV
+past performance (i.e. λ = 0.5), then the smoothed return to-date would equal:
+
+
+r̄0:t = 1 − 0.5(1 − 0.5) r0:t + 0.5(1 − 0.5)r̄0:t−1
+= 0.75 · r0:t + 0.25 · r̄0:t−1
+as opposed to 0.5 · r0:t + 0.5 · r̄0:t−1 for a period without any cash flows and 0.65 · r0:t + 0.35 · r̄0:t−1
+had the GPs been smoothing at the λ = 0.9 rate (given wt = 0.5). Given λ = 0.9 and conditional
+on absent cash flows during the quarter (i.e., 13 weeks), the quarter-ago valuations would be
+contributing 25.4% (= 0.913 ) to the current fund NAV reports.
+Equation (8) therefore models the fund asset appraisal process to reflect both, the observed
+return paths (for rmt and rct ) and the unobserved idiosyncratic fund returns, ηt , to be are most
+consistent with (i) the realized cash flow pattern and (ii) the history of NAV reports. All else equal,
+funds that made substantial distributions recently would be assumed to have less “stale” NAVs.
+Meanwhile, the weight of returns occurring before period τ, 0 < τ < t in N AVt is limited by the
+fraction of fund capital invested before period τ . While under equation (8) the influence of the past
+valuations decays at an exponential rate, it is also straightforward to incorporate “longer memory
+events” in our framework by temporarily shifting λ(·)t up post specific events, such as highly related
+comparable M&A transaction or IPOs, or by expanding the state-space vector outright.
+The Gaussian NAV residual noise parametrized by σn is orthogonal to the observed returns and the
+distribution process. While the temporal independence assumption appears implausible for actual
+PE funds, we argue that the sparseness in the NAV observation series (i.e., once every 13 weeks
+at best) and the irregularity of fund cash flows (and, hence, wt values) mitigate the consequences
+of possibly non-zero temporal correlation structure in the residuals for the identification of the
+fund model parameters. The entry corresponding to the NAV observations in matrix yt is simply
+missing for most observations and almost never overlaps with a non-missing value for dt . To better
+illustrate this, we interpolate nt between the values drawn for the adjacent quarterly NAV reports
+ˆ t in a simulation exercise reported in Section A.4.
+to obtain the between quarter estimate of N AV
+In addition, we investigate the effect of λ(·)t being misspecified in the estimations relatively to
+the data generating process.28 One can also consider making σn time-varying to reflect the stage
+of current fund holdings and differences in GP reporting incentives (e.g., see Brown et al., 2019).
+The latter can be also modeled as a conditional mean of the distribution of nt . Similarly, it is
+straightforward to incorporate data about carry rule to further reduce noise in the estimation.
+28
+If the econometrician also observes dates and amounts with regards to the individual investments in the fund portfolio,
+λ(·)t can be further refined to reflect the return histories during the remaining investments only. Therefore, the ’First-In-FirstOut’-assumption that expression (8) implements is no longer needed.
+
+Appendix - 3
+
+A.2.2
+
+Cash flow process
+
+According to equations (7) and (9), the fund distribution process is governed by the parametric
+function δ(·)t and a mean-zero noise dt parametrized by time-invariant σd . By construction, they
+are capturing the variation in the fund distributions that cannot be explained the asset return path,
+on the one hand, and the periodically observed NAV series, on the other hand. Also note that fund
+capital calls do not relate to either δ(·)t or dt but only affect the asset-to-value mapping function,
+mt , discussed later in this section.
+While equation (9) certainly misspecifies δ(·)t relatively to the true conditional expectation (and,
+therefore inducing potentially heavy temporal dependencies in the residuals), we argue that irregularity in distribution occurrence mitigates the violations of the SSM identifying assumptions
+discussed in the beginning of this section. As with NAV smoothing process, we scrutinize this
+conjecture in our simulations discussed below.
+Another insightful extension to the baseline setup in expressions (1–7) would be utilization of
+prices (or quotes) from the secondary market transaction with the fund stakes (e.g., see Nadauld et al.,
+2016). As are the fund distributions (in fact, they are equivalent from the LPs perspective), these
+prices would map to the fund unsmoothed returns, but one-to-one:
+log(SecondaryPricet ) + mt = r0:t + pt
+
+,
+
+(A.9)
+
+whereby pt , the price distortion effects, can be either assumed to be zero, or modeled accordingly
+to incorporate time-varying demand and supply variation in these still nascent markets (e.g., see
+Albuquerque et al., 2018). Similarly, one can incorporate venture deals round valuation data—if
+the fraction of reported fund-level NAVs that the deal corresponds to is known.29
+
+A.3
+
+Estimation details
+
+Rct -interpolated NAVs. For any q − < t ≤ q where q and q − are last weeks of two adjacent
+quarters ’Rct -interpolated NAVs’ are defined as follows:
+Y
+Y
+X
+
+−
+ip
+Rcp
+(A.10)
+Rcτ +
+(Cτ − Dτ )e(t−τ )ψq
+Ṽt = N AVt=q− e(t−q )ψq
+q − <τ ≤t
+
+q − <τ ≤t
+
+τ <p≤t
+
+where ψq is the quarter-specific drift that makes eq. (A.10) hold if Ṽt
+
+ip
+
+is replaced with N AVt=q .
+
+α-range center for profiling. For center of the α-range, we compute IRRs from the discounted
+cash flows as do Gredil, Griffiths, and Stucke (2014):
+αp0 = arg min
+α
+
+T
+X
+n=0
+
+(Cn − Dn )
+
+Y
+
+proj{Rct |Rmt } · (1 + α)−n
+
+
+
+(A.11)
+
+n<t≤T
+
+and approximate fund duration with a weighted average life when IRR solutions are ambiguous. In
+work contemporaneous to ours, Korteweg and Nagel (2017) show that using average beta estimates
+improves inference about fund-level abnormal performance under the Generalized PME framework
+in Korteweg and Nagel (2016) even if fund βs are heterogeneous. Therefore, to obtain the center of
+the α-grid, we use the projection of fund-matched Rct on Rmt for the discount factor construction.
+Penalty function For each combination of α and β on the profile grid (i.e., grid cell ij), we obtain
+the maximum likelihood estimates of ϑpout
+and standardize the Loglikelihood scores by subtracting
+ij
+the grid-wide min and dividing by the grid-wide standard deviation to obtain sLL(αi , βj ) ≡ sLLij .
+From each sLLij , we then subtract a penalty function sP M Eerrij which is the grid-wide stan29
+
+Provided that the contractual terms are comparable or adjusted accordingly (see Gornall and Strebulaev, 2017).
+
+Appendix - 4
+
+dardized P M Eerrij defined as:
+P M Eerrij = P M Eij − 1
+
+
+PT −1
+QT
+D
+1
++
+α
++
+β
+(R
+−
+1)
++ V̂T + DT
+t
+i
+j
+mt
+t=0
+τ =t+1
+
+
+P M Eij = P
+Q
+T −1
+T
+C
+1
++
+α
++
+β
+(R
+−
+1)
++ CT
+t
+i
+j
+mt
+t=0
+τ =t+1
+
+(A.12)
+(A.13)
+
+to obtain pLLij , where VˆT = N AVT + ˆ
+biasT and ˆ
+biast is the expected appraisal bias at t defined
+in equation A.14. Picking the supremum value of pLLij on the grid identifies the corresponding (αp , βp )-pair which we use as fixed data in the second step in which we estimate remaining
+parameters, ϑ ∈ θ, as well as mapping-to-value functions and weekly fund returns.
+Mapping-to-Parameter iterations. Because our latent state is fund returns and future fund
+distributions inherently related to today’s returns, we argue that the backward recursion method is
+the most natural choice in our context (i.e. nowcasting). We therefore drop the superscript smooth
+and instead superscript it the per period and cumulative returns estimates with the set of SSM
+θ , r̄ θ . It follows from equations (4) and (6)
+parameters that they were derived upon, e.g. rθt , r0:t
+0:t
+that the expected appraisal bias and the the unbiased net asset values (i.e. Vt ) for any week t are:
+θ
+θ
+bias(θ)t :=r0:t
+− r̄0:t
+
+(A.14)
+
+θ
+Vt (m̂t ; θ)t =exp{r0:t
+− m̂t }
+
+(A.15)
+
+Meanwhile, for weeks t when NAV reports are observed (i.e., t ∈ |teq |), the debiased NAV values
+have to satisfy:
+Vt (N AVt ; θ)t = N AVt e−bias(θ)t
+
+t ∈ |teq |
+
+(A.16)
+
+which we use in combination with expression A.8 to obtain m̂t series. However, this makes the
+mapping mt a function of parameters θ and equation (A.15) a fixed point. Furthermore, m̂t enter
+the observation vector xt and, therefore, potentially affects the parameter values under which the
+SSM logLikelihood is maximized. Therefore, starting with the m̂t implied by the Rct -interpolated
+NAVs (≡ mt |(rc1 , . . . , rcT )), and the corresponding ϑ estimates, we set a loop over i:
+ax
+m(i)t=1,...,T = m(ϑargM
+)
+i−1
+ax
+ϑargM
+= arg max LLp (ϑ; m(i)t=1,...,T )
+i
+
+(A.17)
+
+ϑ
+
+ax
+ax
+in which m(i)t and ϑargM
+are re-estimated sequentially until the average change in ϑargM
+i
+i
+ax
+from ϑargM
+is smaller than 5% on average across all ϑ elements, whereby LLp denotes the SSM
+i−1
+likelihood function conditional on θ ∈
+/ ϑ being fixed at values determined in the first step.
+
+A.4
+
+Monte Carlo experiment
+
+In this section, we demonstrate our estimation methodology and its nowcasting performance using
+simulated data at weekly frequency. We begin with a single-fund case study and then present
+evidence aggregated over a random sample of such funds.
+
+A.4.1
+
+Single-fund case study
+
+This particular fund operated for 626 weeks. It made 18 capital calls over the first 215 weeks for
+the total of $5.25mln (including $1mln at inception, i.e. week 0) and 25 distributions of various
+amounts for a total of $17.71mln at irregular intervals, starting on 110th week.
+
+Appendix - 5
+
+Panel A of Figure A.1 plots these data over fund life-weeks, along with the “True Asset Values”
+(i.e. Vt in equation 3)—unobservable with real fund data—as well as the quarterly NAV reports
+that reflect appraisal smoothing as in equation (8) at λ of 0.90 and the reporting noise volatility,
+σn , of 5.0%. We can see that this process generates both upward and downward biases in reported
+NAVs (relatively to Vt ), depending on the recent path in fund returns, as plotted in Panel C.
+Panel B rescales the variables by the fund asset value so that ’D/(D+V)’ correspond to exp{δ(·)t +
+dt } in equation 7 while ’N/V-1’ is the overall reporting distortion, exp{r̄0:t − r0:t + nt } − 1 in
+equations (4–6). The panel also plots similar statistic for weekly series obtained by interpolating
+as reported NAVs at the rate of comparable asset returns Rct while accounting for the cash flows
+between the quarters (henceforth, ’Rct -interpolated NAVs’, see equation (A.10) below). Essentially,
+this is a nowcast of fund NAVs that assumes no appraisal bias present and a unit βc as in equation
+(2), providing for a natural benchmark to evaluate the SSM-based nowcasts.
+The since-inception return corresponding to ’Rct -interpolated NAVs’ is plotted against the true
+since-inception returns (R0:t in equation (4)) in Panel C. By construction, the two series are tightly
+correlated and occasionally coincide (e.g., around 250th and 350th weeks). Even though the fund
+is fully resolved by the 626th week and the expected per-period difference in idiosyncratic risk
+realization—ηct in equation 2—is zero, the series diverge notably towards the end of fund life
+nonetheless. The reason for this divergence is the assumptions embedded in the interpolation
+procedure in equation (A.10), namely: (i) reported NAVs reflect the true value of fund assets, and
+(ii) distributions reduce remaining NAVs one-for-one.
+As evident from Panel B and C, the series based on NAV interpolation overshoot whenever the
+fund makes distributions following the quarter with downward-biased NAVs. Intuitively, the returns
+during periods following these distributions have to be higher than true ones to “catch-up” with
+the subsequent NAV report, especially if the latter is less [more] negatively [positively] biased than
+the previous. These dynamics are present but concealed with since-inception money multiples (also
+plotted in Panel C), which unlike R0:t are Vt−1 -weighted per period return, therefore exhibiting
+very little variation after Vt gets small in front peak values (around week-200 in this case).30
+Figure A.2 depicts the SSM likelihood scores and the pricing error via 3-dimensional mesh plots
+on Panel A. Both are normalized by subtracting the grid-wide mean and dividing by standard
+deviation. It follows from Panel A that the SSM likelihood scores do peak with respect to β around
+the value of 1.20 but hardly exhibit any curvature along the α-axis. In contrast, the flat region
+in the surface of pricing errors is off-diagonal.31 Therefore, subtracting these pricing errors from
+the SSM likelihood scores—i.e., “penalizing the SSM likelihood”—tends to result in a sharp peak
+across both dimensions, as plotted on Panel B. In our case, the maximum corresponds to the (α, β)
+pair of (0.308%,1.15)—close to the OLS estimates of (0.327%,1.26) that one would obtain if weekly
+(Rt − 1) were regressed on (Rmt − 1), especially when compared to those from quarterly OLS
+estimates feasible with real fund data which are plotted as the blue rectangle in Panel B.32
+As discussed in the main text, having identified the pair of α and β, we iteratively estimate the
+asset-to-value mapping ad the remaining parameters. For this case study fund, this mapping-toparameter convergence took 12 iterations and resulted in the following (α, β, ϑ)-vector, whereby
+standard errors were obtained using numerical differentiation (see, e.g., Miranda and Fackler, 2004):
+Estimate
+SE(Est)
+
+α
+.0031
+.0043
+
+β
+1.154
+0.643
+
+δ
+.0432
+.0141
+
+σd
+1.488
+1.349
+
+λ
+.7918
+0.0805
+
+σn
+.0121
+.0014
+
+F
+2.014
+0.832
+
+Fc
+.7853
+.108
+
+ψ
+.0021
+.0018
+
+βc
+.713
+0.182
+
+Panel A of Figure A.3 examines the quality of per period fund return estimates for our case fund
+by plotting the difference between r̂0t obtained from the SSM parametrized with θ-values tabulated
+above and the true r0t as a solid red line. In is natural to compare it to a similar difference
+obtained from the intuitive approach based on ’Rct -interpolated NAVs’ plotted with dotted red
+line here (obtained by subtracting the solid line from the dashed one in Panel C of Figure A.1). It
+30
+
+See Brown et al. (2019) for a discussion on inference about NAV appraisal bias with multiples.
+That is typically the case with an upward-trending market return—without regularly spaced intervals, high cumulative
+returns can be “equally well explained” by either high slope or large intercept.
+32
+For example, regressing quarterly ’cash flow’-adjusted quarterly growth in NAV on contemporaneous and lagged market
+returns yields a beta estimate of at most 0.84 and 0.4 if weekly returns based on ’Rct -interpolated NAVs’ are used.
+31
+
+Appendix - 6
+
+follows that the SSM-based series tend to be closer to the true fund returns during and after the
+parameter estimation period. The panel also compares three Asset-to-Value mapping functions for
+our case study fund: the initial guess, the true, and iteratively estimated one as discussed above.
+The latter two tend to be closer indicating that the SSM provides for a better guess of the true
+asset values on the cash flow dates.
+Panel A of Figure A.3 also conveys the general intuition of our approach—our fund return prediction for a week is a scaled weighted average of rct and rmt unless there is a NAV report or
+distribution that justify ηct 6= 0 (see equation 2).33 A distribution also shifts the mapping function
+up in proportion to its size relatively to the remaining asset value estimate.
+As for nowcasting performance metrics introduced in Section 2.3, the Hybrid and OOS RMSE for
+the estimated model-based series are, respectively, 0.066 and 0.063. Both compare favorably with
+the respective metrics based on the Naı̈ve nowcast of fund approach (see A.10).
+Finally, we note that Figure A.3 there appears to be no sharp change in the SMM performance
+in the post-estimation period (397th week). This is to be expected in the case the SSM parameters
+are stable during the fund life which might not necessary be the case with real-life PE funds. Either
+way, to the extent the choice of parameter estimation window length is not identifying structural
+breaks, one can consider the in-sample PME(SSM) values as a predictor of Hybrid and OOS metrics.
+Specifically, we compute mean squared deviation from one for the during 156 weeks before tb .
+
+A.4.2
+
+Simulated panel of funds
+
+The case study fund is a draw from the following data generating process. First, we simulate market
+returns Rmt from a normal distribution with GARCH(1,1) volatility process corresponding to the
+unconditional volatility of 20% per annum.34 We then create 25 vintage years each featuring four
+funds that operate for at most 13 years (=676 weeks) and have β ∼ N(1.25, 0.125) with respect to
+Rmt and α ∼ N(0, 0.0022), both fixed during fund life. In addition, each fund returns are driven by
+mean-zero shocks drawn at weekly frequency as a mixture of two heteroskedastic normal shocks,
+one of which is common within vintage but temporarily independent still, and Poisson jumps (see
+next paragraph). Meanwhile the benchmark returns, Rct , are obtained by averaging the common
+components of fund returns within each vintage-week (i.e. 1 + βi (Rmt − 1) plus the common shock).
+To construct fund non-Rmt returns, ηt , for each week we draw two independent normal shocks
+from N(0, ht ) where log(ht ) ∼ N(ρ0 + ρ1 log(ht−1 ), vv 2 ). We add the two shocks together assuming
+that the vintage-wide shock comprises 1/3 and the fund-specific—2/3. This implies that if we
+use Rct -based estimates in place of ĥt , the true value of the volatility scale F equals 2 while the
+Eηt2 = 0.40.35 In addition, in spirit of simulations in Korteweg and Nagel (2017), we assume that
+each week there is 10% probability of a 10% idiosyncratic increase in fund asset value. We draw
+these jumps from a Poisson distribution, add them to the normal shocks, and demean the sum to
+zero over each fund life before adding to 1 + αi + βi (Rmt + 1) for each fund-week t to obtain Rt .
+Next we construct fund cash flows and asset values. Fund cash flow occurrences are drawn from a
+Poisson distribution parametrized such that there is on average 15 capital calls lasting through the
+225th week and 20 distributions per fund starting with 105th week. The first capital call is equal to
+1 with subsequent capital calls (conditional on occurrence) equal to 0.25. Fund distribution process
+follows equation (9) with δ set to 0.04 while σd = 1.20. The distribution amounts are determined
+sequentially with fund true asset values following equations (3–7). Each fund life ends (i.e., t = T )
+on either 676th week or the week in which its true asset values drop below 0.1 (i.e. 10% of the
+initial capital call) with the last distribution set to equal VT (and the latter replaced with zero).
+Finally, the quarterly observed NAVs are constructed using equations (5–6) by setting λ to 0.9
+and drawing observation noise, ent , from N(0, 0.05) independently for each fund-quarter. When
+constructing the weekly Rct -interpolated NAVs to estimate change in mapping in equation (A.8)
+and λ(·)t -process in equation (8), we interpolate the values of ent between the adjacent quarters
+inducing the same autocorrelation pattern in the estimands as if it were real PE fund data.
+33
+
+This can also be a secondary trade in fund stake, or a comparable exit, or a financing round for the portfolio company.
+The persistence terms on squared return and lagged variance are 0.10 and 0.85, respectively.
+35
+ρ0= −0.5784, ρ1=0.9, vv=0.40p.a., to match the idiosyncratic return volatility estimates in Korteweg and Sorensen (2010).
+34
+
+Appendix - 7
+
+Table A.1 reports estimation results for the main parameters of interest and the pricing error
+criteria using the holdout fund-weeks as discussed in Section 2.3. First seven columns of each panel
+report the means and the medians of parameter estimates across the 100 of simulated funds as
+well as the first, second, and third quartile of the root mean squared error of the fund estimate
+relatively to the true parameter value. Last four columns report PME(V ˆ(θ), r(θ)), denoted with
+subscript f und, and PME(N AV, rc ), denoted with subscript bmk, for pseudo out-of-sample and
+fully out-of-sample case. The sample of 100 simulated funds is common across panels, therefore
+P OSbmk and F OSbmk are the same panel-wise reflecting same N AVt and rct series.
+Panel A reports Direct Estimates as in Section 2.4.1 (henceforth, Baseline) and reveals that
+estimated parameters are typically close to the true values, exhibiting minimal bias for (β, λ σn ), in
+particular. A notable upward bias as well as high levels of RMSE relatively to the true parameter
+values are evident for σd and, perhaps, for δ. Panel A also shows an advantage of using fund return
+and asset values estimates (over the matched benchmark and as reported NAVs) as both, Hybrid
+and OOS, PME(V ˆ(θ), r(θ)) tend to be closer to 1 than PME(N AV, rc ), while median OOS RMSE
+at 0.1171 is less than half of 0.2841 corresponding to the naı̈ve approach.36
+In Panel B, we assume the distribution function δ(·)t to be known and feature no uncertainty
+σd = 0. As discussed in Section A.2.2, this corresponds to a situation in which one can observe
+the fund individual investments’ valuation reports and exit terms. Unsurprisingly, this helps with
+estimation precision, especially, with respect to the variance parameters—F (σn ) is no longer downward (upward) biased while the associated RMSEs are smaller by a factor of 4 to 15. Interestingly,
+the presence of jumps in the fund return process does not prevent consistency in estimating the
+volatility scale parameter via MLE which assumes conditionally Gaussian returns. The gains in
+precision are also notable for β estimation whereby RMSEs drop by half, as well as for the smoothing parameter, λ. All these translate in better nowcasting performance as Hybrid (OOS) 75th
+percentile RMSEs drop to 0.0093(0.1298) from 0.0230(.2368) in Panel A.
+In Panel C, we misspecify δ(·)t by assuming in the estimation that δ(·)t is proportional to the
+time since last distribution (rather than the time since inception) as in Korteweg and Nagel (2016).
+As discussed in Section A.2.2, this induces autocorrelation in the error term of the distribution
+equation 7. It follows that this has virtually no adverse effects on the identification of the model
+parameters relatively to Baseline, other than δ and σd themselves. Neither does it materially affect
+the nowcasting performance relatively to Baseline, consistent with the case study evidence.
+In Panel D, we implement the partial imputation approach discussed in Section 2.4.2. While we
+do observe improvements to RMSE on a few parameters including β, these are somewhat predetermined by the homogeneity in the parameters across funds, and do not translate in meaningful
+improvements with regards to nowcasting.
+Figure A.4 plots the individual fund estimates of α and β from our SSM against the corresponding
+OLS estimates obtain with weekly returns (infeasible with the actual PE data). Panel A shows
+that profiled α are well aligned with what one could have estimated if PE funds weekly returns
+were observable, even though slightly downward biased. For β, we continue to observe a positive
+relation between the two sets of estimates although much greater noise is present.
+Finally, Figure A.4 compares the nowcasting performance as per Baseline estimations against the
+naı̈ve approach that utilizes as reported NAVs and matched benchmark returns. Panel C focus on
+pseudo out-of-sample metric while Panel D—on fully out-of-sample ones, as discussed in Section 2.3.
+For better visualization, we utilize the logs of variances so the magnitudes are harder to read than
+RMSEs from Table A.1. However, it is clear from that our SSM approach results in better nowcasts
+for a significant majority of simulated funds regardless of the metric.
+Panel C of Figure A.3 compares the nowcast performance of the SSM parametrized with these θ
+for our case study by plotting the quarterly RMSEs for NAV estimation error against those from
+the same SSM parametrized with fund-specific estimates referred to as Baseline. We see that NAV
+estimates based on Partially imputed θ are often smaller but typically close to the Baseline. The
+improvement is due the fact that the peer-imputed (λ, F, σn ) are close to the true values than those
+estimated directly, which may or may not be true with real-life funds. For comparison, Panel C also
+plots quarterly NAV errors for the case when the distribution function δ(·)t need not be estimated
+which—as discussed in Section A.2.2—could be the individual deal-level transparency at the fund.
+36
+
+In untabulated analysis, we review an estimator which profiles α only. It results in larger nowcasting errors.
+
+Appendix - 8
+
+Figure A.1. Case study: Data for a hypothetical fund
+This figure reports data for a hypothetical PE fund to illustrate our method applications. See Section A.4.1
+for description.
+
+Panel A: Cash flows and reported NAVs normalized by first capital call
+
+Panel B: Cash flows and reported NAVs normalized by Asset Values
+
+Panel C: Cumulative returns and Multiples
+
+Appendix - 9
+
+Figure A.2. Case study: Profiled Likelihood
+This figure illustrates selected parameters’ identification for a hypothetical PE fund to illustrate our method
+applications. See Section A.4.1 for description.
+
+Panel A: SSM likelihood and the Penalty function
+
+Panel B: Penalized likelihood
+
+Appendix - 10
+
+Figure A.3. Case study: Nowcasting results
+This figure demonstrates nowcasts obtained from a SSM for a hypothetical PE fund to illustrate our method
+applications. See Section A.4.1 for description.
+
+Panel A: Return estimates and Mapping to Asset Values
+
+Panel B: Asset Value estimates and PMEs
+
+Panel C: Asset Values estimates from models with fewer parameters
+
+Appendix - 11
+
+Figure A.4. Monte Carlo experiment: cross-section of α,β and nowcasting
+performance
+This figure reports SSM estimates on simulated fund data described in Section A.4.2. The dotted and dashed
+lines are, respectively, the 45-degree and the least-squared fit lines. Panel A (B) plots the OLS estimates—
+which are BLUE but infeasible with the real data—of funds’ α (β) on x-axis against the SSM-based estimates
+on y-axis. A positive association and low variance across y-axis indicate good performance of our method.
+Whereas Panels C and D plot the log of mean squared error obtained using matched benchmark returns on
+x-axis against SSM-based estimated fund returns on y-axis. Panel C (D) uses Hybrid (Out-of-Sample) metric
+discussed in Section 2.3. Observations below the 45-degree line indicate outperformance of our method over
+a naı̈ve approach that simply uses public benchmark returns to model fund NAVs.
+
+Panel A: α estimates
+
+Panel B: β estimates
+
+Panel C: log MSE Hybrid
+
+Panel D: log MSE OOS
+
+Appendix - 12
+
+Table A.1. Monte Carlo experiment: parameter estimates and nowcasting
+performance
+This table reports SSM estimates on simulated fund data described in Section A.4.2. Each reports seven
+key parameters of interest as well Hybrid and Out-of-Sample (OOS) nowcasting metrics as discussed in
+Section 2.3, whereby subscripts bmk and f und denote to the matched benchmark return and SSM-filtered
+fund return series, respectively. ’Est. mean’ and ’Est. median’ refer to the simulated fund sample mean and
+median estimate of the respective parameter (or of PME against the respective return series for Hybrid/OOS
+columns). ’RMSE p25/p50/p75’ refer to the respectively percentile of the Root Mean Squared Error relatively
+to the true parameter value (or 1 for Hybrid/OOS columns). Panel A reports the results for baseline
+estimation approach, Panel B treats distribution function as known, Panel C misspecifies the estimated
+distribution function relatively to the simulated data. Panel D reports results for partially matched parameter
+estimates.
+
+Panel A: Baseline
+α
+Est. mean
+Est. median
+RMSE p25
+RMSE p50
+RMSE p75
+
+β
+
+δ
+
+λ
+
+F
+
+σd
+
+σn
+
+Hybridnai
+
+-0.0006 1.2306 0.0485 0.8722 1.7111 2.0340 0.0524 1.4805
+-0.0002 1.2264 0.0470 0.8955 1.4746 2.0364 0.0547 1.1250
+0.0008 0.1406 0.0133 0.0192 0.4006 0.6812 0.0169 0.0333
+0.0022 0.3591 0.0170 0.0544 0.7147 0.8812 0.0358 0.1250
+0.0038 0.5730 0.0225 0.0802 1.4178 1.0314 0.0490 0.3069
+
+Hybridssm
+
+OOSnai
+
+OOSssm
+
+1.0422
+1.0093
+0.0022
+0.0093
+0.0230
+
+0.9204
+0.8547
+0.1525
+0.2841
+0.4070
+
+0.9911
+0.9750
+0.0418
+0.1171
+0.2368
+
+Hybridssm
+
+OOSnai
+
+OOSssm
+
+1.0098
+1.0037
+0.0012
+0.0037
+0.0093
+
+0.9204
+0.8547
+0.1525
+0.2841
+0.4070
+
+0.9952
+1.0046
+0.0313
+0.0712
+0.1298
+
+Hybridssm
+
+OOSnai
+
+OOSssm
+
+1.0428
+1.0097
+0.0019
+0.0097
+0.0226
+
+0.9204
+0.8547
+0.1525
+0.2841
+0.4070
+
+1.0396
+0.9828
+0.0492
+0.1094
+0.2364
+
+Panel B: Known δ(·)t
+α
+
+β
+
+δ
+
+Est. mean
+-0.0005 1.1978 Est. median -0.0002 1.2500 RMSE p25
+0.0008 0.0961 RMSE p50
+0.0022 0.2099 RMSE p75
+0.0038 0.3621 -
+
+λ
+
+F
+
+σd
+
+0.8774 2.1717 0.9000 2.0000 0.0002 0.1000 0.0086 0.2417 0.0264 0.5690 -
+
+σn
+
+Hybridnai
+
+0.0484 1.4805
+0.0500 1.1250
+0.0001 0.0333
+0.0026 0.1250
+0.0050 0.3069
+
+Panel C: Misspecified δ(·)t
+α
+Est. mean
+Est. median
+RMSE p25
+RMSE p50
+RMSE p75
+
+β
+
+δ
+
+λ
+
+F
+
+σd
+
+σn
+
+Hybridnai
+
+-0.0006 1.2433 0.2308 0.8743 1.8297 3.8015 0.0502 1.4805
+-0.0002 1.2264 0.2307 0.9065 1.5543 3.9367 0.0530 1.1250
+0.0008 0.1362 0.1647 0.0223 0.3395 2.4508 0.0169 0.0333
+0.0023 0.3541 0.2007 0.0482 0.8104 2.6415 0.0347 0.1250
+0.0038 0.5644 0.2359 0.0861 1.4166 2.8139 0.0490 0.3069
+
+Panel D: Partially matched parameters (from Baseline)
+α
+Est. mean
+Est. median
+RMSE p25
+RMSE p50
+RMSE p75
+
+β
+
+δ
+
+λ
+
+F
+
+σd
+
+σn
+
+Hybridnai
+
+-0.0006 1.3216 0.0481 0.8722 1.7111 2.0409 0.0524 1.4805
+-0.0002 1.3481 0.0460 0.8974 1.6058 2.0509 0.0460 1.1250
+0.0009 0.0837 0.0131 0.0099 0.3305 0.6909 0.0055 0.0333
+0.0024 0.1853 0.0160 0.0324 0.4728 0.8766 0.0118 0.1250
+0.0040 0.3737 0.0216 0.0536 0.8356 1.0426 0.0209 0.3069
+
+Appendix - 13
+
+Hybridssm
+
+OOSnai
+
+OOSssm
+
+1.0113
+1.0058
+0.0015
+0.0058
+0.0141
+
+0.9204
+0.8547
+0.1525
+0.2841
+0.4070
+
+0.9811
+0.9686
+0.0584
+0.1108
+0.2196
+
+Table A.2. Real Estate Private Equity (REPE) funds
+This table reports summary statistics for the sample of 486 Real Estate funds in our sample, selected SSM
+parameter estimates, filtered returns, and nowcasting performance metrics. See Tables 1 and 3 for definitions
+and details.
+
+Summary statistics:
+Vintage year
+Fund size (USD mil.)
+Fund life (years)
+IRR(%)
+Money Multiple
+PME (v. CRSP VW)
+# Capital Calls
+# Distributions
+# NAV reports
+% Resolved
+# Quarters w/ Dist.> 0
+w/ Dist > 5% of Fund
+
+mean
+
+sd
+
+skew
+
+p5
+
+p10
+
+p25
+
+p50
+
+p75
+
+p90
+
+p95
+
+2003.2
+607.0
+10.8
+4.9
+1.3
+0.9
+23.6
+31.9
+19.1
+86.2
+9.5
+5.6
+
+4.6
+860.5
+1.4
+13.7
+0.6
+0.5
+18.8
+23.0
+2.6
+19.7
+5.8
+4.4
+
+-1.1
+6.1
+-1.1
+-0.3
+0.6
+0.9
+1.7
+1.4
+-0.6
+-2.0
+0.2
+1.0
+
+1989
+16
+6.40
+-38.5
+0.12
+0.080
+3
+1
+13
+14.1
+0
+0
+
+1994
+73
+7.98
+-17.6
+0.36
+0.22
+6
+5
+14
+39.2
+1
+0
+
+2000
+206
+9.83
+-2.42
+0.86
+0.56
+11
+16
+18
+82.3
+5
+2
+
+2005
+396.5
+11.2
+6.06
+1.30
+0.86
+16
+26
+20
+95.3
+9
+5
+
+2007
+684
+12.0
+13.2
+1.62
+1.21
+30
+45
+21
+99
+14
+8
+
+2008
+1725.0
+12.0
+25.6
+2.22
+1.75
+63
+77
+23
+99.7
+19
+14
+
+2008
+4001
+12.0
+33.6
+3.22
+2.27
+92
+117
+24
+100
+22
+18
+
+mean
+
+p25
+
+p50
+
+p75
+
+mean
+
+p25
+
+0.048
+−0.004
+0.001
+0.001
+
+0.097
+0.084
+0.077
+0.077
+
+0.796
+0.891
+0.912
+0.893
+
+0.576
+0.717
+1.005
+0.875
+
+p50
+
+p75
+
+0.727
+0.922
+1.006
+1.000
+
+1.148
+1.089
+1.006
+1.000
+
+0.928
+0.923
+0.947
+0.953
+
+0.976
+0.972
+0.947
+0.953
+
+Key parameter estimates:
+α
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.031
+−0.020
+−0.019
+−0.019
+
+−0.031
+−0.097
+−0.091
+−0.092
+
+β
+
+Fc
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.861
+1.257
+0.969
+0.982
+
+0.788
+0.875
+0.818
+0.813
+
+λ
+0.917
+0.991
+0.905
+0.924
+
+1.010
+1.144
+1.070
+1.085
+
+0.817
+0.889
+0.890
+0.894
+
+0.821
+0.818
+0.914
+0.922
+
+Filtered return properties:
+Quarterly return autocorrelation
+Naive nowcast
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.385
+0.001
+0.019
+−0.139
+−0.130
+
+0.230
+−0.182
+−0.182
+−0.336
+−0.332
+
+0.416
+0.015
+−0.006
+−0.168
+−0.168
+
+0.593
+0.192
+0.187
+0.001
+−0.004
+
+Quarterly return variance
+0.049
+0.082
+0.052
+0.077
+0.076
+
+0.005
+0.010
+0.019
+0.042
+0.041
+
+0.009
+0.025
+0.029
+0.056
+0.055
+
+0.018
+0.076
+0.047
+0.077
+0.077
+
+Nowcast performance assessment:
+Hybrid RMSE
+Naive nowcast
+Fund-specific
+Peer-imputed
+Average-imputed
+Literature-imputed
+
+0.333
+0.161
+0.176
+0.208
+0.203
+
+0.158
+0.037
+0.048
+0.072
+0.072
+
+0.295
+0.075
+0.092
+0.133
+0.130
+
+OOS RMSE
+0.476
+0.174
+0.197
+0.259
+0.246
+
+Appendix - 14
+
+0.335
+0.227
+0.161
+0.215
+0.206
+
+0.147
+0.052
+0.050
+0.062
+0.053
+
+0.274
+0.134
+0.101
+0.133
+0.131
+
+0.470
+0.262
+0.194
+0.255
+0.251
+
+
