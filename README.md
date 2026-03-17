@@ -1,50 +1,69 @@
-# Nowcasting PE NAVs
+# Nowcasting Private Equity Fund Values
 
-A pedagogical Python implementation of **"Nowcasting Net Asset Values: The Case of Private Equity"** by Brown, Ghysels, and Gredil (*The Review of Financial Studies*, Vol 36(3), March 2023, pp. 945-986).
+A Python implementation of the methodology from **"Nowcasting Net Asset Values: The Case of Private Equity"** by Brown, Ghysels, and Gredil (*The Review of Financial Studies*, 2023).
 
-## What This Does
+## The Problem
 
-Private equity funds report NAVs only quarterly, with smoothing and lag. This project implements the paper's state space model (SSM) that combines sparse quarterly NAVs, irregular fund distributions, and weekly comparable public asset returns to estimate latent fund values at weekly frequency using a Kalman filter.
+Private equity funds only report their values once per quarter — and even those numbers are smoothed and delayed. Between reports, investors are essentially flying blind. If you own a stake in a PE fund and the public stock market drops 15% this week, what is your fund actually worth right now? The quarterly report won't tell you for months.
 
-Everything runs on **simulated data** with known parameters, so the methodology can be validated against ground truth.
+## The Approach
+
+This project implements a statistical model that produces **weekly estimates of a PE fund's true value** by stitching together three sources of information:
+
+- **Quarterly NAV reports** — the official (but stale and smoothed) fund valuations
+- **Cash flow events** — distributions paid out and capital called in, which happen irregularly
+- **Public market returns** — weekly returns from a comparable public asset (like a sector ETF), which are always available
+
+The core idea is a **Kalman filter** — a well-established algorithm that optimally combines noisy, irregularly-arriving signals to track a hidden quantity over time. Here, the hidden quantity is the fund's true return each week.
+
+The model effectively "unsmooths" the quarterly reports: instead of a value that barely changes quarter to quarter, you get a realistic, more volatile weekly series that reflects what the fund is likely worth in real time.
+
+## How It's Validated
+
+Everything runs on **simulated data** where we know the true answer. We generate a synthetic PE fund with realistic behavior — market exposure, idiosyncratic risk, quarterly reporting, smoothing, cash flows — and then see how well the model can recover the true weekly values from only the information an investor would actually observe.
+
+This makes it possible to measure exactly how much better the model does compared to simpler approaches (like just scaling the last reported NAV by public market returns).
+
+## What's in the Notebook
+
+The main deliverable is an interactive Jupyter notebook (`notebooks/nowcasting_pe_nav.ipynb`) that walks through the full methodology step by step:
+
+1. **Why this matters** — motivation and context for the PE valuation problem
+2. **Simulating a fund** — generating realistic synthetic PE fund data over ~11 years
+3. **A simple baseline** — estimating values by scaling reported NAVs with public returns
+4. **The state space model** — how the problem is cast into a form the Kalman filter can solve
+5. **Running the Kalman filter** — producing weekly return estimates, comparing to the truth
+6. **Estimating parameters** — learning the model's unknowns (market beta, smoothing degree, etc.) from data
+7. **Handling sparse data** — a technique for when you don't have enough observations
+8. **Measuring performance** — how close are the nowcasts to reality?
+9. **Monte Carlo experiments** — repeating the exercise across many simulated funds to test robustness
+10. **Sensitivity analysis** — which parameters matter most for nowcast quality?
+11. **Glossary** — plain-language definitions of key concepts with links for further reading
+
+Each section includes visualizations that compare the model's estimates against the known ground truth.
 
 ## Project Structure
 
 ```
 nowcasting_pe/
-├── src/
-│   ├── garch.py            # GARCH(1,1) for idiosyncratic volatility h_t
-│   ├── simulation.py       # Synthetic PE fund DGP (eqs 1-9)
-│   ├── naive.py            # Rc-interpolated NAV baseline (eq A.10)
-│   ├── ssm.py              # SSM matrix construction (eqs A.4-A.6)
-│   ├── kalman.py           # Kalman filter (A.2) and smoother (A.3)
-│   ├── estimation.py       # Profile likelihood grid + MLE + EM iterations
-│   ├── metrics.py          # PME-based RMSE metrics (Section 2.3)
-│   └── visualization.py    # Plotting functions for all figures
+├── src/                        # All model code
+│   ├── simulation.py           # Generate synthetic PE fund data
+│   ├── ssm.py                  # Build the state space model matrices
+│   ├── kalman.py               # Kalman filter and smoother
+│   ├── naive.py                # Simple baseline for comparison
+│   ├── estimation.py           # Parameter estimation (grid search + optimization)
+│   ├── metrics.py              # Performance measurement
+│   ├── garch.py                # Time-varying volatility estimation
+│   └── visualization.py        # All plotting functions
 ├── notebooks/
-│   └── nowcasting_pe_nav.ipynb   # Main pedagogical notebook
-├── docs/plans/                    # Design and implementation plans
-├── pyproject.toml
-└── README.md
+│   └── nowcasting_pe_nav.ipynb # Main walkthrough notebook
+├── docs/plans/                 # Design and implementation notes
+└── pyproject.toml              # Dependencies and project config
 ```
 
-## Notebook Sections
+## Getting Started
 
-1. **Introduction & Motivation** — The PE valuation problem
-2. **Data Generating Process** — Simulate a fund (eqs 1-9), visualize all series
-3. **Naive Nowcast** — Rc-interpolated NAVs as baseline
-4. **State Space Model** — Observation/transition equations, matrix construction
-5. **Kalman Filter & Smoother** — Forward/backward recursions, return extraction
-6. **Parameter Estimation** — Profile likelihood grid, MLE, EM iterations
-7. **Partial Imputation** — Peer-fund parameter anchoring
-8. **Performance Metrics** — PME-based in-sample, OOS, and hybrid RMSE
-9. **Monte Carlo Experiments** — Panel simulation, parameter recovery
-10. **Sensitivity Analysis** — Effect of key parameters on nowcast quality
-11. **Glossary & Appendix** — Definitions with links for SSM, Kalman filter, GARCH, MLE, PME, etc.
-
-## Setup
-
-Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
+**Requirements:** Python 3.13+ and [uv](https://docs.astral.sh/uv/) (a fast Python package manager).
 
 ```bash
 uv venv
@@ -52,53 +71,26 @@ source .venv/bin/activate
 uv pip install -e "."
 ```
 
-## Usage
+Then open the notebook:
 
 ```bash
 jupyter notebook notebooks/nowcasting_pe_nav.ipynb
 ```
 
-Or run modules directly:
+## Key Model Parameters
 
-```python
-from src.simulation import FundParams, simulate_fund
-from src.kalman import kalman_filter, extract_returns
-
-params = FundParams(beta=1.19, lam=0.90, seed=42)
-fund = simulate_fund(params)
-
-kf = kalman_filter(
-    T=fund.T, alpha=params.alpha, beta=params.beta,
-    beta_c=params.beta_c, psi=params.psi,
-    F=params.F, Fc=params.Fc, lam=params.lam, delta=params.delta,
-    sigma_n=params.sigma_n, sigma_d=params.sigma_d,
-    Rm=fund.rm, rc_log=fund.rc_log, h_t=fund.h_t,
-    D=fund.D, C=fund.C, NAV_reported=fund.NAV_reported,
-    is_dist_week=fund.is_dist_week, is_nav_week=fund.is_nav_week,
-    lambda_t=fund.lambda_t, delta_t=fund.delta_t,
-    m_hat=fund.m_t,
-)
-
-r_weekly, r_cumulative = extract_returns(kf, use_smoothed=False)
-```
-
-## Key Parameters
-
-| Parameter | Symbol | Description | Paper Default |
-|-----------|--------|-------------|---------------|
-| `alpha` | $\alpha$ | Weekly excess return | 0.0 |
-| `beta` | $\beta$ | Market risk exposure | 1.19 |
-| `F` | $F$ | Fund idiosyncratic vol scale | 2.0 |
-| `lam` | $\lambda$ | NAV smoothing parameter | 0.90 |
-| `sigma_n` | $\sigma_n$ | NAV reporting noise | 0.05 |
-| `delta` | $\delta$ | Distribution density trend | 0.03 |
-| `beta_c` | $\beta_c$ | Comparable asset loading | 0.85 |
-| `Fc` | $F_c$ | Comparable idiosyncratic vol | 1.0 |
+| Parameter | What It Controls | Default |
+|-----------|-----------------|---------|
+| Beta | How much the fund moves with the public market | 1.19 |
+| Alpha | The fund's excess return above the market | 0.0 |
+| Lambda | How heavily the fund manager smooths reported NAVs (0 = no smoothing, 1 = fully stale) | 0.90 |
+| F | Scale of the fund's idiosyncratic (non-market) risk | 2.0 |
+| Beta_c | How closely the comparable public asset tracks the same market factor | 0.85 |
 
 ## Dependencies
 
-numpy, scipy, pandas, matplotlib, arch (GARCH), jupyter, ipykernel
+numpy, scipy, pandas, matplotlib, arch, jupyter
 
 ## Reference
 
-Brown, G. W., Ghysels, E., & Gredil, O. R. (2023). Nowcasting Net Asset Values: The Case of Private Equity. *The Review of Financial Studies*, 36(3), 945-986. [SSRN](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3507873)
+Brown, G. W., Ghysels, E., & Gredil, O. R. (2023). Nowcasting Net Asset Values: The Case of Private Equity. *The Review of Financial Studies*, 36(3), 945-986. [Paper on SSRN](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3507873)
